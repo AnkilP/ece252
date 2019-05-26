@@ -1,6 +1,6 @@
 /**
- * @file: ls_fname.c
- * @brief: simple ls command to list file names of a directory 
+ * @file: findpng.c
+ * @brief: recursively finds png files in a given directory 
   */
 
 #include <sys/types.h>
@@ -16,23 +16,33 @@
  */
 
 //char * paths[];
-//void lastchar_cut(char *str)
-//{
-    //if(str[strlen(str) - 1] == '/'){
-    //    str[strlen(str)-1] = '\0';
-  //  }
-//}
+void lastchar_cut(char *str)
+{
+    if(str[strlen(str) - 1] == '/'){
+        str[strlen(str)-1] = 0;
+    }
+}
 
-short isPNG(char * path){
-    FILE* f = fopen( argv[1], "rb");
+#define CHUNK 8 /* read 8 bytes at a time */
+//char png_magic_number[3] = {"0x50", "0x4e", "0x47"};
+
+
+int isPNG(char * path){
+    char buf[CHUNK];
+    int x = 0;
+    FILE* f = fopen( path, "r");
     if ( f == NULL ) {
             //printf("Unable to open file! %s is invalid name?\n", argv[1] );
             return 0;
-    }
-    readfile( f );
+    }   
+    
+    fread(buf, 1, sizeof(buf), f);
+    if(buf[1] == 0x50 && buf[2] == 0x4e && buf[3] == 0x47){
+           x = 1;
+    } 
     fclose( f );
+    return x;
 }
-
 
 void query_files(char * path){
   DIR *p_dir;
@@ -49,9 +59,8 @@ void query_files(char * path){
         perror(str);
         exit(2);
     }
-
     
-    //lastchar_cut(path); // this shouldnt really be const, now should it?
+    lastchar_cut(path); // this shouldnt really be const, now should it?
 
     while ((p_dirent = readdir(p_dir)) != NULL) {
         char *str_path = p_dirent->d_name;  /* relative path name! */
@@ -76,9 +85,11 @@ void query_files(char * path){
                     strcat(str, path);
                     strcat(str, "/");
                     strcat(str, str_path); 
-                    printf("%s\n", str);
+                    if(isPNG(str) == 1){
+                        printf("%s\n", str);
+                    }
                     memset(str, 0, 64);
-                    fflush(stdout);
+                    //fflush(stdout);
                 }
             }
         }
@@ -99,10 +110,11 @@ int main(int argc, char *argv[])
 {
 //    char str[64];
     if(argc != 1){  
-        query_files(argv[1]);
+       query_files(argv[1]);
     }
     else{
-            query_files("../images/");
+       int cue = isPNG("../images/WEEF_1.png");
+       printf("%i", cue); 
     } // testing purposes
     return 0;
 }
