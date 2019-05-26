@@ -59,4 +59,7 @@ typedef struct simple_PNG {
  * FUNCTION PROTOTYPES 
  *****************************************************************************/
 
+void list_dir(char *);
+void check_filetype(char *);
+
 /* declare your own functions prototypes here */
