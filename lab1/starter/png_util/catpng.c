@@ -11,12 +11,11 @@
 #include <stdlib.h>  /* for exit().    man 3 exit   */
 #include <string.h>  /* for strcat().  man strcat   */
 #include "zutil.h"
+#include <errno.h>
 
 /**
  *GLOBAL VARIABLES
  */
-char * paths;
-//char * paths[];
 void lastchar_cut(char *str)
 {
     if(str[strlen(str) - 1] == '/'){
@@ -170,40 +169,34 @@ void zerr(int ret)
 }
 
 void concatenatePNG(char * paths[], int numpaths){
-    int width;
-    int height = 0;
+    u_int32_t width_t;
+    u_int32_t height;
     char header[8];
-    char IDHR[13];
+    u_int8_t rest_of_IDHR[5];
     char * IDATA;
     char IEND[12];
-    int i = 0;
+    FILE * f;
     for(int q = 0; q < numpaths; ++q){
-        printf("%s", paths[0]); //debug
-        fflush(stdout);
-        FILE * f = fopen(paths[i++], "r");
+        f = fopen(*(paths++), "r");
         if(f == NULL){
-            printf("Whats up");
+            printf("%i", errno);
             return;
         }
-        fread(header, 1, sizeof(header), f);
+        fread(header, 1, 8, f);
         if(header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47){ //  check if it's a png
                 printf("Or is this the problem");
         }
-        fread(IDHR, 1, sizeof(IDHR), f);
-        printf("%i%", IDHR[0]);
-        memcpy(width, IDHR, 4*sizeof(*IDHR));
-        width = ntohl(width);
-        printf("%i", width);
+        fread(&width_t, 4, sizeof(width_t), f);
+        width_t = ntohl(width_t);
+        printf("%i", width_t);
+
         fclose(f);         
     }
 }
 
 int main(int argc, char * argv[]){
-    if(argc == 1){
-        return 0;
+    if(argc > 1){
+        concatenatePNG(*(++argv), argc - 1);
     }
-    else{
-        concatenatePNG(argv, argc - 1);
-    }
-    free(paths);
+//    free(paths);
 } 
