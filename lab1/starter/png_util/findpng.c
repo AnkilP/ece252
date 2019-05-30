@@ -23,14 +23,14 @@ void lastchar_cut(char *str)
     }
 }
 
-#define CHUNK 8 /* read 8 bytes at a time */
+#define CHUNK 4 /* read 8 bytes at a time */
 //char png_magic_number[3] = {"0x50", "0x4e", "0x47"};
 
 
 int isPNG(char * path){
     char buf[CHUNK];
     int x = 0;
-    FILE* f = fopen( path, "r");
+    FILE* f = fopen( path, "rb");
     if ( f == NULL ) {
             //printf("Unable to open file! %s is invalid name?\n", argv[1] );
             return 0;

@@ -168,35 +168,52 @@ void zerr(int ret)
     }
 }
 
-void concatenatePNG(char * paths[], int numpaths){
-    u_int32_t width_t;
+void concatenatePNG(char  **paths, int numpaths){
+    char ch;
+    u_int32_t width;
     u_int32_t height;
     char header[8];
-    u_int8_t rest_of_IDHR[5];
     char * IDATA;
     char IEND[12];
-    FILE * f;
-    for(int q = 0; q < numpaths; ++q){
-        f = fopen(*(paths++), "r");
+
+    int q;
+    int qq = 0;
+    for( q = 1; q < numpaths; q++){
+        FILE * f = fopen(paths[q], "rb");
         if(f == NULL){
+            printf("NULL file pointer");
             printf("%i", errno);
             return;
         }
         fread(header, 1, 8, f);
-        if(header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47){ //  check if it's a png
-                printf("Or is this the problem");
+        if(header[1] != 0x50 || header[2] != 0x4e || header[3] != 0x47){ //  check if it's a png
+            continue;
         }
-        fread(&width_t, 4, sizeof(width_t), f);
-        width_t = ntohl(width_t);
-        printf("%i", width_t);
+        fread(&width, 1, sizeof(width), f);
+        width = ntohl(width);
 
-        fclose(f);         
+        char temp[5];
+        fread(&temp, 1, 5, f);
+        u_int32_t number_of_pixelbytes = height * width * 4;
+        while((qq++ < number_of_pixelbytes)){
+            ch = fgetc(f);
+            fputc(ch,IDATA);
+        }
+        char CRC[4];
+        fread(CRC, 1, 4, f);
+        fread(IEND, 1, 12, f);
+
+        fclose(f);      
     }
 }
 
 int main(int argc, char * argv[]){
     if(argc > 1){
-        concatenatePNG(*(++argv), argc - 1);
+        FILE *fp = fopen(argv[1], "rb");
+        fclose(fp);
+        printf("%s\n",argv[1]);
+        concatenatePNG(argv, argc);
+
     }
 //    free(paths);
 } 
