@@ -23,28 +23,28 @@ void lastchar_cut(char *str)
     }
 }
 
-#define CHUNK 4 /* read 8 bytes at a time */
+#define CHUNK 8 /* read 8 bytes at a time */
 //char png_magic_number[3] = {"0x50", "0x4e", "0x47"};
 
 
 int isPNG(char * path){
-    char buf[CHUNK];
+    unsigned char buf[CHUNK];
     int x = 0;
     FILE* f = fopen( path, "rb");
     if ( f == NULL ) {
-            //printf("Unable to open file! %s is invalid name?\n", argv[1] );
-            return 0;
+        //printf("Unable to open file! %s is invalid name?\n", argv[1] );
+        return 0;
     }   
     
     fread(buf, 1, sizeof(buf), f);
     if(buf[1] == 0x50 && buf[2] == 0x4e && buf[3] == 0x47){
-           x = 1;
+        x = 1;
     } 
     fclose( f );
     return x;
 }
 
-void query_files(char * path){
+void query_files(char * path) {
   DIR *p_dir;
   struct dirent *p_dirent;
   char str[64];

@@ -38,3 +38,6 @@
 
 # flymd intermediate files
 **/flymd.*
+
+# vscode stuff
+.vscode
