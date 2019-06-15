@@ -97,6 +97,7 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         totaldeflatedsize += deflated_length;
         free(IDAT);
         free(memBuff);
+        free(buff);
         png += 4 * sizeof(*(png));
         memcpy(&IEND, png, 12);
         png += 12 * sizeof(*(png));
