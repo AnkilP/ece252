@@ -241,7 +241,6 @@ int main(int argc, char ** argv){
     for(int i = 0; i < n; ++i){
         free(img_cat[i]);
     }
-    free(img_cat);
 
     // image is in recv_buf.buf
 

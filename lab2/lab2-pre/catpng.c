@@ -31,6 +31,7 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
     U8 header[8];
 
     IHDR_p ihdr_p = NULL;
+    IHDR_p ihdr_copy = NULL;
     U8 IHDR_length[4];
     U8 IHDR_type[4];
     U8* IHDR_crc_buff = NULL;
@@ -67,9 +68,10 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         ihdr_p->height = ntohl(ihdr_p->height);
         totalHeight += (ihdr_p->height);
 
-        png += 11 * sizeof(*(png));
+        png += 4 * sizeof(*(png));
 
         //Read IDAT Length
+        data_chunk_length = 0;
         memcpy(&data_chunk_length, png, 4);
         png += 4 * sizeof(*(png));
         data_chunk_length = ntohl(data_chunk_length);
@@ -79,8 +81,11 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         png += 4 * sizeof(*(png));
 
         //Read in this png's IDAT
-        printf("q: %i\n", data_chunk_length);
+        printf("q: %d, length: %d\n", q, data_chunk_length);
         IDAT = malloc(data_chunk_length * sizeof(*(png)));
+        if (IDAT == NULL) {
+            printf("IDAT malloc failed");
+        }
         memcpy(IDAT, png, data_chunk_length * sizeof(*(png)));
         png += data_chunk_length * sizeof(*(png));
 
@@ -97,10 +102,10 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         totaldeflatedsize += deflated_length;
         free(IDAT);
         free(memBuff);
-        free(buff);
         png += 4 * sizeof(*(png));
         memcpy(&IEND, png, 12);
         png += 12 * sizeof(*(png));
+        free(buff);
     }
 
     int resDef = mem_def(compressedConcatData, &inflated_length, concatData, totaldeflatedsize, Z_DEFAULT_COMPRESSION);
@@ -116,18 +121,24 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
     
     fwrite(&IHDR_type, 4, 1, fw); //type
 
-    ihdr_p->height = totalHeight;
-    ihdr_p->height = htonl(ihdr_p->height);
+    //Grab the IHDR Data chunk from first image
+    U8* png_temp = paths[0];
+    buff = malloc(13);
+    memcpy(buff, png_temp+16, 13);
+    ihdr_copy = (IHDR_p) buff;
+    ihdr_copy->height = totalHeight;
+    ihdr_copy->height = htonl(ihdr_copy->height);
 
-    fwrite(ihdr_p, 13, 1, fw); //data
-
+    fwrite(ihdr_copy, 13, 1, fw); //data
+    
     IHDR_crc_buff = malloc(17);
     memcpy(IHDR_crc_buff, &IHDR_type, 4);
-    memcpy(IHDR_crc_buff + 4, ihdr_p, 13);
+    memcpy(IHDR_crc_buff + 4, ihdr_copy, 13);
     IHDR_crc = crc(IHDR_crc_buff, 17);
     IHDR_crc = htonl(IHDR_crc);
     fwrite(&IHDR_crc, 4, 1, fw); //crc
     free(IHDR_crc_buff);
+    free(buff);
     /***********************************/
 
     /*Writing IDAT**********************/
