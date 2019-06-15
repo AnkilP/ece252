@@ -79,7 +79,7 @@ size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
     if (p->size + realsize + 1 > p->max_size) {/* hope this rarely happens */ 
         /* received data is not 0 terminated, add one byte for terminating 0 */
         size_t new_size = p->max_size + max(BUF_INC, realsize + 1);   
-        char *q = realloc(p->buf, new_size);
+        U8 *q = realloc(p->buf, new_size);
         if (q == NULL) {
             perror("realloc"); /* out of memory */
             return -1;
