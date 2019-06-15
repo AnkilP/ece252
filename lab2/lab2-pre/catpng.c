@@ -19,7 +19,7 @@
  *GLOBAL VARIABLES
  */
 
-void concatenatePNG(U8* png) {
+void concatenatePNG(U8* png, int num_of_splits) {
     unsigned int data_chunk_length = 0;
     int totalHeight = 0;
     U64 deflated_length = 0;
@@ -56,7 +56,7 @@ void concatenatePNG(U8* png) {
     U8* buff = NULL;
 
     int q;
-    for( q = 0; q < 50; q++) {
+    for( q = 0; q < num_of_splits; q++) {
         if(f == NULL) {
             printf("NULL file pointer: %d\n", errno);
             return;
