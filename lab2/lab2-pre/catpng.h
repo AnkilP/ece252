@@ -11,8 +11,8 @@
 #include <stdio.h>   /* for printf().  man 3 printf */
 #include <stdlib.h>  /* for exit().    man 3 exit   */
 #include <string.h>  /* for strcat().  man strcat   */
-#include "../starter/png_util/zutil.h"
-#include "../starter/png_util/crc.h"
+#include "zutil.h"
+#include "crc.h"
 #include <errno.h>
 #include <arpa/inet.h>
 
@@ -39,5 +39,5 @@ typedef struct IHDR {// IHDR chunk data
     U8  interlace;    /* =0: no interlace; =1: Adam7 interlace */
 }* IHDR_p;
 
-void concatenatePNG(char ** paths, int numpaths);
-} 
+void concatenatePNG(U8 ** paths, int numpaths);
+

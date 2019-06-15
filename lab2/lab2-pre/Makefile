@@ -5,13 +5,13 @@
 CC = gcc
 CFLAGS = -Wall -g -std=c99 
 LD = gcc
-LDFLAGS = -g -std=c99
-LDLIBS = -pthread -lcurl -lpng 
+LDFLAGS = -g3 -fsanitize=address -std=c99
+LDLIBS = -pthread -lcurl -lpng -lz
 
-LIB_UTIL = ../starter/png_util/zutil.o ../starter/png_util/crc.o
-SRCS   = paster.c ../starter/png_util/crc.c ../starter/png_util/zutil.c
+LIB_UTIL = zutil.o crc.o catpng.o
+SRCS   = paster.c crc.c zutil.c catpng.c
 OBJS   = paster.o $(LIB_UTIL) 
-TARGETS = paster
+TARGETS = paster 
 
 all: ${TARGETS}
 

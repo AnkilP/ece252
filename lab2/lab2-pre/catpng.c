@@ -3,23 +3,13 @@
  * @brief: iteratively concatenates png files pointed to by user
   */
 
-#include <sys/types.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <stdio.h>   /* for printf().  man 3 printf */
-#include <stdlib.h>  /* for exit().    man 3 exit   */
-#include <string.h>  /* for strcat().  man strcat   */
-#include <errno.h>
-#include <arpa/inet.h>
-#include "../starter/png_util/zutil.h"
-#include "../starter/png_util/crc.h"
+#include "catpng.h"
 
 /**
  *GLOBAL VARIABLES
  */
 
-void concatenatePNG(U8* png, int num_of_splits) {
+void concatenatePNG(U8 ** paths, int num_of_splits) {
     unsigned int data_chunk_length = 0;
     int totalHeight = 0;
     U64 deflated_length = 0;
@@ -54,49 +44,45 @@ void concatenatePNG(U8* png, int num_of_splits) {
     U8* IDAT = NULL;
 
     U8* buff = NULL;
-
-    int q;
-    for( q = 0; q < num_of_splits; q++) {
-        if(f == NULL) {
-            printf("NULL file pointer: %d\n", errno);
-            return;
-        }
-
+    
+    for(int q = 0; q < num_of_splits; q++) {
+        U8 * png = paths[q];
         memcpy(&header, png, 8);
         png += 8 * sizeof(*png);
         if(header[1] != 0x50 || header[2] != 0x4e || header[3] != 0x47) { //  check if it's a png
-            printf("One of the files is not a png: %s, aborting command\n", paths[q]);
-            return;
+            printf("One of the files is not a png: %s, aborting command\n", png);
+            continue;
         }
 
         memcpy(&IHDR_length, png, 4);
-        png += 4 * sizeof(*png);
+        png += 4 * sizeof(*(png));
         memcpy(&IHDR_type, png, 4);
-        png += 4 * sizeof(*png);
+        png += 4 * sizeof(*(png));
 
         buff = malloc(13);
         memcpy(buff, png, 13);
-        png += 13 * sizeof(*png);
+        png += 13 * sizeof(*(png));
 
         ihdr_p = (IHDR_p) buff;
         ihdr_p->height = ntohl(ihdr_p->height);
         totalHeight += (ihdr_p->height);
 
-        png += 11 * sizeof(*png);
+        png += 11 * sizeof(*(png));
 
         //Read IDAT Length
         memcpy(&data_chunk_length, png, 4);
-        png += 4 * sizeof(*png);
+        png += 4 * sizeof(*(png));
         data_chunk_length = ntohl(data_chunk_length);
 
         //Read IDAT Type
         memcpy(&IDAT_type, png, 4);
-        png += 4 * sizeof(*png);
+        png += 4 * sizeof(*(png));
 
         //Read in this png's IDAT
+        printf("q: %i\n", q);
         IDAT = malloc(data_chunk_length);
-        memcpy(IDAT, png, data_chunk_length * sizeof(*png));
-        png += data_chunk_length * sizeof(*png);
+        memcpy(IDAT, png, data_chunk_length * sizeof(*(png)));
+        png += data_chunk_length * sizeof(*(png));
 
         memBuff = malloc(100000);
         if (memBuff == NULL) {
@@ -111,9 +97,9 @@ void concatenatePNG(U8* png, int num_of_splits) {
         totaldeflatedsize += deflated_length;
         free(IDAT);
         free(memBuff);
-        png += 4 * sizeof(*png);
+        png += 4 * sizeof(*(png));
         memcpy(&IEND, png, 12);
-        png += 12 * sizeof(*png);
+        png += 12 * sizeof(*(png));
     }
 
     int resDef = mem_def(compressedConcatData, &inflated_length, concatData, totaldeflatedsize, Z_DEFAULT_COMPRESSION);
@@ -171,11 +157,11 @@ void concatenatePNG(U8* png, int num_of_splits) {
     free(compressedConcatData);
 }
 
-int main(int argc, char ** argv) {
-    if(argc > 1) {
-        FILE *fp = fopen(argv[1], "rb");
-        fclose(fp);
-        concatenatePNG(argv, argc);
-    }
-//    free(paths);
-} 
+// int main(int argc, char ** argv) {
+//     if(argc > 1) {
+//         FILE *fp = fopen(argv[1], "rb");
+//         fclose(fp);
+//         concatenatePNG(argv, argc);
+//     }
+// //    free(paths);
+// } 
