@@ -5,7 +5,7 @@
 CC = gcc
 CFLAGS = -Wall -g -std=c99 
 LD = gcc
-LDFLAGS = -g3 -fsanitize=address -std=c99
+LDFLAGS = -g -std=c99
 LDLIBS = -pthread -lcurl -lpng -lz
 
 LIB_UTIL = zutil.o crc.o catpng.o
