@@ -48,6 +48,7 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
     for(int q = 0; q < num_of_splits; q++) {
         U8 * png = paths[q];
         memcpy(&header, png, 8);
+        printf("size of png: %lu\n", sizeof(*(png)));
         png += 8 * sizeof(*png);
         if(header[1] != 0x50 || header[2] != 0x4e || header[3] != 0x47) { //  check if it's a png
             printf("One of the files is not a png: %s, aborting command\n", png);
@@ -79,7 +80,7 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         png += 4 * sizeof(*(png));
 
         //Read in this png's IDAT
-        printf("q: %i\n", q);
+        printf("q: %lu\n", sizeof(*(png)));
         IDAT = malloc(data_chunk_length);
         memcpy(IDAT, png, data_chunk_length * sizeof(*(png)));
         png += data_chunk_length * sizeof(*(png));

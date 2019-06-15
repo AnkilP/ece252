@@ -13,7 +13,7 @@
 #define IMG_URL "http://ece252-1.uwaterloo.ca:2520/image?img=1"
 
 typedef struct recv_buf2{
-    char * buf;
+    U8 * buf;
     size_t size;
     size_t max_size;
     int seq;
@@ -235,7 +235,7 @@ int main(int argc, char ** argv){
             recv_buf_init(&recv_buf, BUF_SIZE);
         }
     }
-
+    
     concatenatePNG(img_cat, n);
 
     for(int i = 0; i < n; ++i){
