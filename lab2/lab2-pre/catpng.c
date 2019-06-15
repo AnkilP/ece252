@@ -62,33 +62,42 @@ void concatenatePNG(U8* png) {
             return;
         }
 
-        fread(&header, 1, 8, f);
+        memcpy(&header, png, 8);
+        png += 8 * sizeof(*png);
         if(header[1] != 0x50 || header[2] != 0x4e || header[3] != 0x47) { //  check if it's a png
             printf("One of the files is not a png: %s, aborting command\n", paths[q]);
             return;
         }
 
-        fread(&IHDR_length, 4, 1, f);
-        fread(&IHDR_type, 4, 1, f);
-        
+        memcpy(&IHDR_length, png, 4);
+        png += 4 * sizeof(*png);
+        memcpy(&IHDR_type, png, 4);
+        png += 4 * sizeof(*png);
+
         buff = malloc(13);
-        fread(buff, 13, 1, f);
+        memcpy(buff, png, 13);
+        png += 13 * sizeof(*png);
+
         ihdr_p = (IHDR_p) buff;
         ihdr_p->height = ntohl(ihdr_p->height);
         totalHeight += (ihdr_p->height);
 
-        fseek(f, 33, SEEK_SET); //Skip the rest of data from IHDR to IDAT
+        png += 11 * sizeof(*png);
 
         //Read IDAT Length
-        fread(&data_chunk_length, 4, 1, f);
+        memcpy(&data_chunk_length, png, 4);
+        png += 4 * sizeof(*png);
         data_chunk_length = ntohl(data_chunk_length);
 
         //Read IDAT Type
-        fread(&IDAT_type, 4, 1, f);
+        memcpy(&IDAT_type, png, 4);
+        png += 4 * sizeof(*png);
 
         //Read in this png's IDAT
         IDAT = malloc(data_chunk_length);
-        fread(IDAT, sizeof(char), data_chunk_length, f);
+        memcpy(IDAT, png, data_chunk_length * sizeof(*png));
+        png += data_chunk_length * sizeof(*png);
+
         memBuff = malloc(100000);
         if (memBuff == NULL) {
             printf("memBuff malloc failed");
@@ -102,9 +111,9 @@ void concatenatePNG(U8* png) {
         totaldeflatedsize += deflated_length;
         free(IDAT);
         free(memBuff);
-        fseek(f, 4, SEEK_CUR); //skip idat crc
-        fread(&IEND, 1, 12, f);
-        fclose(f);
+        png += 4 * sizeof(*png);
+        memcpy(&IEND, png, 12);
+        png += 12 * sizeof(*png);
     }
 
     int resDef = mem_def(compressedConcatData, &inflated_length, concatData, totaldeflatedsize, Z_DEFAULT_COMPRESSION);
