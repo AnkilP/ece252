@@ -167,7 +167,7 @@ int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf, int * img_ptr
         printf("Image Number: %i\n", num_iter++);
         return 1; // new image found
     }
-    else{
+    else {
         return 0; // duplicate found
     }
 }
@@ -181,11 +181,23 @@ int checkArray(int * images, int n){
     return 0;
 }
 
-int image_producer() {
+int image_producer(queue* buffer, char* url, ) {
+    CURL *curl_handle;
+    RECV_BUF recv_buf;
 
+    recv_buf_init(&recv_buf, BUF_SIZE);
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    /* init a curl session */
+    curl_handle = curl_easy_init();
+
+    if (curl_handle == NULL) {
+        fprintf(stderr, "curl_easy_init: returned NULL\n");
+        return 1;
+    }
 }
 
-int image_processor() {
+int image_processor(queue* buffer, ) {
      
 }
 
@@ -198,7 +210,10 @@ int main(int argc, char ** argv){
     queue buffer;
 
     int shmid;
-    pid_t pid;
+    pid_t producer_pid;
+    pid_t consumer_pid;
+    pid_t prodpids[num_p];
+    pid_t conspids[num_c];
     
     if (argc < 6) {
         fprintf(stderr, "Not enough arguments to run paster2 command.\n");
@@ -213,6 +228,10 @@ int main(int argc, char ** argv){
     c_sleep = atoi(argv[4]);
     image_id = argv[5];
 
+    char* url = strcat("http://ece252-1.uwaterloo.ca:2530/image?img=", image_id);
+    char* url_part = strcat(url, "&part=");
+    char* curr_url;
+
     int shmsize = buffer_size * sizeof(node);
     shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid == -1 ) {
@@ -220,41 +239,49 @@ int main(int argc, char ** argv){
         abort();
     }
 
-    pid = fork();
-    if (pid == 0) { //child process (producer, use this to download png data)
+    // forking producer processes
+    for (i = 0; i < num_p; i++) {
+        producer_pid = fork();
 
-    }
-    else { //parent process (use this to wait until downloads done, then we consume the data and write to our png total buffer to be concated later)
+        if (pid == 0) { //child process (producer, use this to download png data)
+            queue* buffer;
+            buffer = shmat(shmid, NULL, 0);
+            if ( buffer == (void *) -1 ) {
+                fprintf(stderr, "shmat error");
+                abort();
+            }
 
-    }
-    
-    queue* buffer;
-    buffer = shmat(shmid, NULL, 0);
-    if ( buffer == (void *) -1 ) {
-        fprintf(stderr, "shmat error");
-        abort();
-    }
-
-    char* url = strcat("http://ece252-1.uwaterloo.ca:2530/image?img=", image_id);
-    char* url_part = strcat(url, "&part=");
-
-    CURL *curl_handle;
-    RECV_BUF recv_buf;
-
-    recv_buf_init(&recv_buf, BUF_SIZE);
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-
-    /* init a curl session */
-    curl_handle = curl_easy_init();
-
-    if (curl_handle == NULL) {
-        fprintf(stderr, "curl_easy_init: returned NULL\n");
-        return 1;
+            curr_url = strcat(url, itoa());
+            image_producer(buffer, curr_url)
+        }
+        else if (pid > 1) { //parent process (save all the pids so we can wait)
+            prodpids[i] = producer_pid;
+        }
+        else {
+            fprintf(stderr, "fork error");
+            abort();
+        }
     }
 
-    int images[n];
-    for(int i = 0; i < n; ++i){
-        images[i] = -1;
+    // forking consumer processes
+    for (i = 0; i < num_p; i++) {
+        consumer_pid = fork();
+
+        if (pid == 0) { //child process (producer, use this to download png data)
+            queue* buffer;
+            buffer = shmat(shmid, NULL, 0);
+            if ( buffer == (void *) -1 ) {
+                fprintf(stderr, "shmat error");
+                abort();
+            }
+        }
+        else if (pid > 1) { //parent process (save all the pids so we can wait)
+            conspids[i] = consumer_pid;
+        }
+        else {
+            fprintf(stderr, "fork error");
+            abort();
+        }
     }
 
     U8 * img_cat[n];
