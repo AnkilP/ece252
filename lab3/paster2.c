@@ -181,7 +181,17 @@ int checkArray(int * images, int n){
     return 0;
 }
 
-int image_producer(queue* buffer, char* url, ) {
+//push data to queue
+int push(queue* q, void* data) {
+
+}
+
+//pop data from queue
+void* pop(queue* q) {
+
+}
+
+int image_producer(queue* buffer, char* url) {
     CURL *curl_handle;
     RECV_BUF recv_buf;
 
@@ -197,23 +207,25 @@ int image_producer(queue* buffer, char* url, ) {
     }
 }
 
-int image_processor(queue* buffer, ) {
+int image_processor(queue* buffer) {
      
 }
 
-int main(int argc, char ** argv){
+int main(int argc, char ** argv) {
     int buffer_size;
     int num_p;
     int num_c;
     int c_sleep;
     int image_id;
-    queue buffer;
+    queue buffer; //fixed queue buffer
+    U8 * img_cat[n]; //global structure
+    double times[2];
+    struct timeval tv;
 
     int shmid;
-    pid_t producer_pid;
-    pid_t consumer_pid;
-    pid_t prodpids[num_p];
-    pid_t conspids[num_c];
+    pid_t pid;
+    pid_t cpids[num_p + num_c];
+    int pstate;
     
     if (argc < 6) {
         fprintf(stderr, "Not enough arguments to run paster2 command.\n");
@@ -221,6 +233,12 @@ int main(int argc, char ** argv){
         fprintf(stderr, "<B>: Buffer Size.\n<P>: Number of Producers.\n<C>: Number of Consumers.\n<X>: Number of milliseconds that a consumer sleeps.\n<N>: Image Number.\n");
         return -1;
     }
+
+    if (gettimeofday(&tv, NULL) != 0) {
+        perror("gettimeofday");
+        abort();
+    }
+    times[0] = (tv.tv_sec) + tv.tv_usec/1000000.;
 
     buffer_size = atoi(argv[1]);
     num_p = atoi(argv[2]);
@@ -241,7 +259,7 @@ int main(int argc, char ** argv){
 
     // forking producer processes
     for (i = 0; i < num_p; i++) {
-        producer_pid = fork();
+        pid = fork();
 
         if (pid == 0) { //child process (producer, use this to download png data)
             queue* buffer;
@@ -254,8 +272,8 @@ int main(int argc, char ** argv){
             curr_url = strcat(url, itoa());
             image_producer(buffer, curr_url)
         }
-        else if (pid > 1) { //parent process (save all the pids so we can wait)
-            prodpids[i] = producer_pid;
+        else if (pid > 1) { //parent process (save all the child pids so we can wait for them)
+            cpids[i] = pid;
         }
         else {
             fprintf(stderr, "fork error");
@@ -264,10 +282,10 @@ int main(int argc, char ** argv){
     }
 
     // forking consumer processes
-    for (i = 0; i < num_p; i++) {
-        consumer_pid = fork();
+    for (; i < num_p + num_c; i++) {
+        pid = fork();
 
-        if (pid == 0) { //child process (producer, use this to download png data)
+        if (pid == 0) { //child process (consumer, use this to take the downloaded png data from our fixed buffer and put it into our global structure)
             queue* buffer;
             buffer = shmat(shmid, NULL, 0);
             if ( buffer == (void *) -1 ) {
@@ -276,7 +294,7 @@ int main(int argc, char ** argv){
             }
         }
         else if (pid > 1) { //parent process (save all the pids so we can wait)
-            conspids[i] = consumer_pid;
+            cpids[i] = pid;
         }
         else {
             fprintf(stderr, "fork error");
@@ -285,27 +303,42 @@ int main(int argc, char ** argv){
     }
 
     U8 * img_cat[n];
-    if(t == 1){
-        while(checkArray(images, n)) {
-            if(curl_main(curl_handle, url, &recv_buf, images)){ //new image found
-                img_cat[recv_buf.seq] = malloc(recv_buf.size);
-                memcpy(img_cat[recv_buf.seq], recv_buf.buf, recv_buf.size);
-                recv_buf_init(&recv_buf, BUF_SIZE);
+    // if(t == 1){
+    //     while(checkArray(images, n)) {
+    //         if(curl_main(curl_handle, url, &recv_buf, images)){ //new image found
+    //             img_cat[recv_buf.seq] = malloc(recv_buf.size);
+    //             memcpy(img_cat[recv_buf.seq], recv_buf.buf, recv_buf.size);
+    //             recv_buf_init(&recv_buf, BUF_SIZE);
+    //         }
+    //         recv_buf_init(&recv_buf, BUF_SIZE);
+    //     }
+    // }
+
+    //After forking everything
+    if (pid > 0) { //this is the parent process
+        for (i = 0; i < num_p + num_c; i++) {
+            waitpid(cpids[i], &pstate, 0);
+            if (WIFEXITED(state)) {
+                printf("Child cpid[%d]=%d terminated with state: %d.\n", i, cpids[i], state);
             }
-            recv_buf_init(&recv_buf, BUF_SIZE);
         }
+
+        concatenatePNG(img_cat, n);
+
+        for(int i = 0; i < n; ++i){
+            free(img_cat[i]);
+        }
+
+        // image is in recv_buf.buf
+        curl_easy_cleanup(curl_handle);
+        curl_global_cleanup();
+        recv_buf_cleanup(&recv_buf);
+
+        if (gettimeofday(&tv, NULL) != 0) {
+            perror("gettimeofday");
+            abort();
+        }
+        times[1] = (tv.tv_sec) + tv.tv_usec/1000000.;
+        printf("Parent pid = %d: total execution time is %.6lf seconds\n", getpid(),  times[1] - times[0]);
     }
-    
-    concatenatePNG(img_cat, n);
-
-    for(int i = 0; i < n; ++i){
-        free(img_cat[i]);
-    }
-
-    // image is in recv_buf.buf
-
-    curl_easy_cleanup(curl_handle);
-    curl_global_cleanup();
-    recv_buf_cleanup(&recv_buf);
-
 }
