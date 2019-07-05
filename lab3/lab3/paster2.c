@@ -46,7 +46,7 @@ int is_empty(RSTACK *p);
 int push(RSTACK *p, RECV_BUF * item, sem_t * sems);
 int pop(RSTACK *p, RECV_BUF *p_item, sem_t * sems);
 
-int num_iter = 1;
+int num_iter = 0;
 
 #define max(a, b) \
    ({ __typeof__ (a) _a = (a); \
@@ -69,8 +69,10 @@ int num_iter = 1;
  */
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
 {
+    printf("whats up\n");
     int realsize = size * nmemb;
     RECV_BUF *p = (RECV_BUF *) userdata;
+    printf("This is the future of the universe %i\n", p->max_size);
     
     if (realsize > strlen(ECE252_HEADER) &&
 	strncmp(p_recv, ECE252_HEADER, strlen(ECE252_HEADER)) == 0) {
@@ -81,7 +83,6 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     }
     return realsize;
 }
-
 
 int init_shm_stack(RSTACK *p, int stack_size)
 {
@@ -146,6 +147,7 @@ int is_empty(RSTACK *p)
     if ( p == NULL ) {
         return 0;
     }
+
     return ( p->pos == -1 );
 }
 
@@ -290,6 +292,7 @@ int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * 
     }
 
     curl_main(curl_handle, url, recv_buf);
+
     while(!push(p, recv_buf, sems)){
         sleep(c_sleep > 0 ? c_sleep : 500);
     }
@@ -317,11 +320,13 @@ int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img
 }
 
 int main(int argc, char ** argv) {
+    // printf("Starting the program\n");
     int buffer_size;
     int num_p;
     int num_c;
     int c_sleep;
     U8 ** img_cat;
+    U8 ** img_cat_cpy;
     double times[2];
     struct timeval tv;
     unsigned long part_num;
@@ -349,11 +354,16 @@ int main(int argc, char ** argv) {
     num_c = atoi(argv[3]);
     c_sleep = atoi(argv[4]);
 
-    pid_t cpids[num_p + num_c];
+    if(num_p < 1 || num_c < 1){
+        fprintf(stderr, "Producer and consumer values must be greater than 0");
+        abort();
+    }
 
-    char* url = strcat("http://ece252-1.uwaterloo.ca:2530/image?img=", argv[5]);
-    url = strcat(url, "&part=");
-    char* curr_url;
+    pid_t cpids[num_p + num_c];
+    char * url = (char *)malloc(255);
+    strcpy(url, "http://ece252-1.uwaterloo.ca:2530/image?img=");
+    strcat(url, argv[5]);
+    strcat(url, "&part=");
     
     time_t t;
     srand((unsigned) time(&t));
@@ -375,6 +385,7 @@ int main(int argc, char ** argv) {
         pid = fork();
 
         if (pid == 0) { //child process (producer, use this to download png data)
+            printf("creating a new producer process\n");
             image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
             init_shm_stack(image_buffer, buffer_size);
 
@@ -401,22 +412,25 @@ int main(int argc, char ** argv) {
             //while(some condition related to getting all the image parts)
             if(num_p >= 50){
                 sprintf(stringz,"%d",i % 50);
-                curr_url = strcat(url, stringz);
-                image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
+                strcat(url, stringz);
+                image_producer(url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
             }
             else{
                 for(int j = 0; j < 50/num_p + (50 % num_p != 0); ++j){
+                    // printf("Downloading images\n");
                     sprintf(stringz, "%d", i * (50/num_p + (50 % num_p != 0)) + j); 
-                    image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
+                    strcat(url, stringz);
+                    image_producer(url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
                 }
             }
 
             curl_easy_cleanup(curl_handle);
-            recv_buf_cleanup(recv_buf);
 
             shmdt(image_buffer);
             shmdt(sems);
-            
+
+            free(url);
+            recv_buf_cleanup(recv_buf);
             return 0;
             
         }
@@ -434,6 +448,7 @@ int main(int argc, char ** argv) {
         pid = fork();
 
         if (pid == 0) { //child process (consumer, use this to take the downloaded png data from our fixed buffer and put it into our global structure)
+            // printf("creating a new consumer process\n");
             image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
             init_shm_stack(image_buffer, buffer_size);
 
@@ -459,14 +474,17 @@ int main(int argc, char ** argv) {
                 abort();
             }
 
-            while(!is_empty(image_buffer)){
+            while(!is_empty(image_buffer) || part_num == 0){
+                // printf("processing images\n");
                 image_processor(image_buffer, c_sleep, &part_num, img_cat, sems);
+                num_iter++;
             }
 
             shmdt(image_buffer);
             shmdt(&part_num);
-            shmdt(img_cat);
             shmdt(sems);
+
+            free(url);
 
             return 0;
 
@@ -489,12 +507,13 @@ int main(int argc, char ** argv) {
             }
         }
 
+        concatenatePNG(img_cat, 50);
+        shmdt(img_cat);
+
         shmctl( shmid, IPC_RMID, NULL );
         shmctl( shmid_sems, IPC_RMID, NULL );
         shmctl( schmidt, IPC_RMID, NULL );
         shmctl( slhmantha, IPC_RMID, NULL );
-
-        concatenatePNG(img_cat, 50);
 
         for(int i = 0; i < 50; ++i){
             free(img_cat[i]);
@@ -502,6 +521,7 @@ int main(int argc, char ** argv) {
 
         curl_global_cleanup();
 
+        free(url);
         free(image_buffer);
         free(sems);
 
