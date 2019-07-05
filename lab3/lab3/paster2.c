@@ -322,7 +322,6 @@ int main(int argc, char ** argv) {
     int num_c;
     int c_sleep;
     U8 ** img_cat;
-    //U8 ** img_cat_cpy;
     double times[2];
     struct timeval tv;
     unsigned long part_num;
@@ -367,7 +366,7 @@ int main(int argc, char ** argv) {
     int shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * 2, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    int slhmantha = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int slhmantha = shmget(IPC_PRIVATE, 50 * BUF_INC, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid == -1 || shmid_sems == -1 || schmidt == -1 || slhmantha == -1) {
         fprintf(stderr, "shmget error");
         abort();
@@ -376,7 +375,7 @@ int main(int argc, char ** argv) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // forking producer processes
-    for (int i = 0; i < num_p; i++) {
+    for (int i = 1; i <= num_p; i++) {
         pid = fork();
 
         if (pid == 0) { //child process (producer, use this to download png data)
@@ -403,7 +402,7 @@ int main(int argc, char ** argv) {
             char* url_part = (char* )malloc(256);
             //while(some condition related to getting all the image parts)
             if(num_p >= 50){
-                sprintf(stringz,"%d",i % 50);
+                sprintf(stringz,"%d",(i - 1) % 50);
                 strcpy(url_part, url);
                 strcat(url_part, stringz);
                 /* init a curl session */
@@ -416,9 +415,9 @@ int main(int argc, char ** argv) {
                 image_producer(url_part, curl_handle, image_buffer, c_sleep, sems);
             }
             else{
-                for(int j = 0; j < 50/num_p + (50 % num_p != 0); ++j){
+                for(int j = 0; j < 50/(num_p) + (50 % num_p != 0); ++j){
                     // printf("Downloading images\n");
-                    sprintf(stringz, "%d", i * (50 / num_p + (50 % num_p != 0)) + j);
+                    sprintf(stringz, "%d", i + j - 1);
                     strcpy(url_part, url);
                     strcat(url_part, stringz);
                     /* init a curl session */
@@ -463,6 +462,7 @@ int main(int argc, char ** argv) {
             memset(&part_num_c, 0, sizeof(part_num_c));
 
             U8** img_cat_c = (U8 ** ) shmat(slhmantha, NULL, 0);
+            img_cat = (U8 **) (img_cat + sizeof(img_cat));
 
             sem_t* sems_c = (sem_t *) shmat(shmid_sems, NULL, 0);
 
