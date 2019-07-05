@@ -38,7 +38,7 @@
 #include <sys/wait.h>
 #include <semaphore.h>
 
-#define IMG_URL "http://ece252-1.uwaterloo.ca:2530/image?img=1&part=20"
+#define IMG_URL "http://ece252-1.uwaterloo.ca:2530/image?img=1&part=0"
 #define DUM_URL "https://example.com/"
 #define ECE252_HEADER "X-Ece252-Fragment: "
 #define BUF_SIZE 10240  /* 1024*10 = 10K */

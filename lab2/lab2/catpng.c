@@ -81,7 +81,7 @@ void concatenatePNG(U8 ** paths, int num_of_splits) {
         png += 4 * sizeof(*(png));
 
         //Read in this png's IDAT
-        printf("q: %d, length: %d\n", q, data_chunk_length);
+        // printf("q: %d, length: %d\n", q, data_chunk_length);
         IDAT = malloc(data_chunk_length * sizeof(*(png)));
         if (IDAT == NULL) {
             printf("IDAT malloc failed");

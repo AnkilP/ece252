@@ -6,6 +6,13 @@
 #include <curl/curl.h>
 #include <sys/types.h>
 #include "catpng.h" //for concatenatePNG()
+#include <sys/shm.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+// #include "shm_stack.h"
 
 #define ECE252_HEADER "X-Ece252-Fragment: "
 #define BUF_INC 524288
@@ -17,20 +24,27 @@ typedef struct recv_buf2{
     int seq;
 } RECV_BUF;
 
-typedef struct queue_struct {
-    node* head;
-    node* tail;
-} queue;
+typedef struct image_stack
+{
+    int size;               /* the max capacity of the stack */
+    int pos;                /* position of last item pushed onto the stack */
+    RECV_BUF *items;             /* stack of stored integers */
+} RSTACK;
 
-typedef struct node_struct {
-    U8 data[10000];
-    node* next_node;
-} node;
 
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
 size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 int recv_buf_cleanup(RECV_BUF *ptr);
+
+int init_shm_stack(RSTACK *p, int stack_size);
+int sizeof_shm_stack(int size);
+RSTACK *create_image_stack(int size);
+void destroy_stack(RSTACK *p);
+int is_full(RSTACK *p);
+int is_empty(RSTACK *p);
+int push(RSTACK *p, RECV_BUF * item);
+int pop(RSTACK *p, RECV_BUF *p_item);
 
 int num_iter = 1;
 
@@ -56,7 +70,7 @@ int num_iter = 1;
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
 {
     int realsize = size * nmemb;
-    RECV_BUF *p = userdata;
+    RECV_BUF *p = (RECV_BUF *) userdata;
     
     if (realsize > strlen(ECE252_HEADER) &&
 	strncmp(p_recv, ECE252_HEADER, strlen(ECE252_HEADER)) == 0) {
@@ -68,6 +82,100 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     return realsize;
 }
 
+
+int init_shm_stack(RSTACK *p, int stack_size)
+{
+    if ( p == NULL || stack_size == 0 ) {
+        return 1;
+    }
+
+    p->size = stack_size;
+    p->pos  = -1;
+    p->items = (RECV_BUF *) (p + sizeof(RSTACK));
+    return 0;
+}
+
+int sizeof_shm_stack(int size)
+{
+    return (sizeof(RSTACK) + sizeof(int) * size);
+}
+
+RSTACK *create_image_stack(int size)
+{
+    int mem_size = 0;
+    RSTACK *pstack = NULL;
+    
+    if ( size == 0 ) {
+        return NULL;
+    }
+
+    mem_size = sizeof_shm_stack(size);
+    pstack = malloc(mem_size);
+
+    if ( pstack == NULL ) {
+        perror("malloc");
+    } else {
+        char *p = (char *)pstack;
+        pstack->items = (RECV_BUF *) (p + sizeof(RSTACK));
+        pstack->size = size;
+        pstack->pos  = -1;
+    }
+
+    return pstack;
+}
+
+void destroy_stack(RSTACK *p)
+{
+    if ( p != NULL ) {
+        free(p);
+    }
+}
+
+int is_full(RSTACK *p)
+{
+    if ( p == NULL ) {
+        return 0;
+    }
+    return ( p->pos == (p->size -1) );
+}
+
+int is_empty(RSTACK *p)
+{
+    if ( p == NULL ) {
+        return 0;
+    }
+    return ( p->pos == -1 );
+}
+
+int push(RSTACK *p, RECV_BUF * item)
+{
+    if ( p == NULL ) {
+        return -1;
+    }
+
+    if ( !is_full(p) ) {
+        ++(p->pos);
+        memcpy(&(p->items[p->pos]), item, sizeof(*item));
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+int pop(RSTACK *p, RECV_BUF *p_item)
+{
+    if ( p == NULL ) {
+        return -1;
+    }
+
+    if ( !is_empty(p) ) {
+        *p_item = p->items[p->pos];
+        (p->pos)--;
+        return 0;
+    } else {
+        return 1;
+    }
+}
 
 /**
  * @brief write callback function to save a copy of received data in RAM.
@@ -87,7 +195,7 @@ size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata)
     if (p->size + realsize + 1 > p->max_size) {/* hope this rarely happens */ 
         /* received data is not 0 terminated, add one byte for terminating 0 */
         size_t new_size = p->max_size + max(BUF_INC, realsize + 1);   
-        U8 *q = realloc(p->buf, new_size);
+        U8 *q = (U8 *) realloc(p->buf, new_size);
         if (q == NULL) {
             perror("realloc"); /* out of memory */
             return -1;
@@ -117,7 +225,7 @@ int recv_buf_init(RECV_BUF *ptr, size_t max_size)
 	return 2;
     }
     
-    ptr->buf = p;
+    ptr->buf = (U8 *) p;
     ptr->size = 0;
     ptr->max_size = max_size;
     ptr->seq = -1;              /* valid seq should be positive */
@@ -136,7 +244,7 @@ int recv_buf_cleanup(RECV_BUF *ptr)
     return 0;
 }
 
-int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf, int * img_ptr){
+int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf){
     CURLcode res;
     /* specify URL to get */
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
@@ -158,18 +266,6 @@ int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf, int * img_ptr
     if( res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
     } 
-    // else {
-    // printf("%lu bytes received in memory %p\n", recv_buf->size, recv_buf->buf);
-    // }
-
-    if(img_ptr[recv_buf->seq] == -1){
-        img_ptr[recv_buf->seq] = 1;  
-        printf("Image Number: %i\n", num_iter++);
-        return 1; // new image found
-    }
-    else {
-        return 0; // duplicate found
-    }
 }
 
 int checkArray(int * images, int n){
@@ -181,22 +277,9 @@ int checkArray(int * images, int n){
     return 0;
 }
 
-//push data to queue
-int push(queue* q, void* data) {
+int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * p, int c_sleep) {
 
-}
-
-//pop data from queue
-void* pop(queue* q) {
-
-}
-
-int image_producer(queue* buffer, char* url) {
-    CURL *curl_handle;
-    RECV_BUF recv_buf;
-
-    recv_buf_init(&recv_buf, BUF_SIZE);
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    recv_buf_init(recv_buf, BUF_INC);
 
     /* init a curl session */
     curl_handle = curl_easy_init();
@@ -205,10 +288,24 @@ int image_producer(queue* buffer, char* url) {
         fprintf(stderr, "curl_easy_init: returned NULL\n");
         return 1;
     }
+
+    curl_main(curl_handle, url, recv_buf);
+    while(!push(p, recv_buf)){
+        sleep(c_sleep > 0 ? c_sleep : 500);
+    }
+
+    return 0;
 }
 
-int image_processor(queue* buffer) {
-     
+int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img_cat) {
+    RECV_BUF * image;
+    pop(p, image);
+
+    if(!(*part_num & (1 << (image->seq)))){
+        img_cat[image->seq] = (U8 *) malloc(sizeof(image->size));
+        img_cat[image->seq] = image->buf;
+    }
+
 }
 
 int main(int argc, char ** argv) {
@@ -216,16 +313,15 @@ int main(int argc, char ** argv) {
     int num_p;
     int num_c;
     int c_sleep;
-    int image_id;
-    queue buffer; //fixed queue buffer
-    U8 * img_cat[n]; //global structure
+    U8 * img_cat[50];
     double times[2];
     struct timeval tv;
-
     int shmid;
+    int schmidt;
     pid_t pid;
-    pid_t cpids[num_p + num_c];
     int pstate;
+
+    RSTACK * image_buffer;
     
     if (argc < 6) {
         fprintf(stderr, "Not enough arguments to run paster2 command.\n");
@@ -244,33 +340,65 @@ int main(int argc, char ** argv) {
     num_p = atoi(argv[2]);
     num_c = atoi(argv[3]);
     c_sleep = atoi(argv[4]);
-    image_id = argv[5];
+    int image_id = atoi(argv[5]);    
 
-    char* url = strcat("http://ece252-1.uwaterloo.ca:2530/image?img=", image_id);
-    char* url_part = strcat(url, "&part=");
+    pid_t cpids[num_p + num_c];
+
+    char* url = strcat("http://ece252-1.uwaterloo.ca:2530/image?img=", argv[5]);
+    url = strcat(url, "&part=");
     char* curr_url;
+    
+    time_t t;
+    srand((unsigned) time(&t));
 
-    int shmsize = buffer_size * sizeof(node);
+    int shmsize = sizeof_shm_stack(buffer_size);
     shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * 2, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid == -1 ) {
         fprintf(stderr, "shmget error");
         abort();
     }
 
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     // forking producer processes
-    for (i = 0; i < num_p; i++) {
+    for (int i = 0; i < num_p; i++) {
         pid = fork();
 
         if (pid == 0) { //child process (producer, use this to download png data)
-            queue* buffer;
-            buffer = shmat(shmid, NULL, 0);
-            if ( buffer == (void *) -1 ) {
+            image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
+            init_shm_stack(image_buffer, buffer_size);
+            
+            if ( image_buffer == (void *) -1 ) {
                 fprintf(stderr, "shmat error");
                 abort();
             }
 
-            curr_url = strcat(url, itoa());
-            image_producer(buffer, curr_url)
+            CURL * curl_handle;
+            RECV_BUF * recv_buf;
+
+            char stringz[20];
+            //while(some condition related to getting all the image parts)
+            if(num_p >= 50){
+                sprintf(stringz,"%d",i % 50);
+                curr_url = strcat(url, stringz);
+                image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep);
+            }
+            else{
+                for(int j = 0; j < 50/num_p + (50 % num_p != 0); ++j){
+                    sprintf(stringz, "%d", i * (50/num_p + (50 % num_p != 0)) + j); 
+                    image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep);
+                }
+            }
+
+            curl_easy_cleanup(curl_handle);
+            recv_buf->buf = NULL;
+            recv_buf->size = 0;
+            recv_buf->max_size = 0;
+            
+            return 0;
+            
         }
         else if (pid > 1) { //parent process (save all the child pids so we can wait for them)
             cpids[i] = pid;
@@ -282,16 +410,23 @@ int main(int argc, char ** argv) {
     }
 
     // forking consumer processes
-    for (; i < num_p + num_c; i++) {
+    for (int i = num_p; i < num_p + num_c; ++i) {
         pid = fork();
 
         if (pid == 0) { //child process (consumer, use this to take the downloaded png data from our fixed buffer and put it into our global structure)
-            queue* buffer;
-            buffer = shmat(shmid, NULL, 0);
-            if ( buffer == (void *) -1 ) {
+            image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
+            init_shm_stack(image_buffer, buffer_size);
+
+            unsigned long part_num = (unsigned long) shmat(schmidt, NULL, 0);
+            memset(&part_num, 0, sizeof(part_num));
+
+            if ( image_buffer == (void *) -1) {
                 fprintf(stderr, "shmat error");
                 abort();
             }
+
+            image_processor(image_buffer, c_sleep, &part_num, img_cat);
+
         }
         else if (pid > 1) { //parent process (save all the pids so we can wait)
             cpids[i] = pid;
@@ -302,37 +437,22 @@ int main(int argc, char ** argv) {
         }
     }
 
-    U8 * img_cat[n];
-    // if(t == 1){
-    //     while(checkArray(images, n)) {
-    //         if(curl_main(curl_handle, url, &recv_buf, images)){ //new image found
-    //             img_cat[recv_buf.seq] = malloc(recv_buf.size);
-    //             memcpy(img_cat[recv_buf.seq], recv_buf.buf, recv_buf.size);
-    //             recv_buf_init(&recv_buf, BUF_SIZE);
-    //         }
-    //         recv_buf_init(&recv_buf, BUF_SIZE);
-    //     }
-    // }
-
     //After forking everything
     if (pid > 0) { //this is the parent process
-        for (i = 0; i < num_p + num_c; i++) {
+        for (int i = 0; i < num_p + num_c; i++) {
             waitpid(cpids[i], &pstate, 0);
-            if (WIFEXITED(state)) {
-                printf("Child cpid[%d]=%d terminated with state: %d.\n", i, cpids[i], state);
+            if (WIFEXITED(pstate)) {
+                printf("Child cpid[%d]=%d terminated with state: %d.\n", i, cpids[i], pstate);
             }
         }
 
-        concatenatePNG(img_cat, n);
+        concatenatePNG(img_cat, 50);
 
-        for(int i = 0; i < n; ++i){
+        for(int i = 0; i < 50; ++i){
             free(img_cat[i]);
         }
 
-        // image is in recv_buf.buf
-        curl_easy_cleanup(curl_handle);
         curl_global_cleanup();
-        recv_buf_cleanup(&recv_buf);
 
         if (gettimeofday(&tv, NULL) != 0) {
             perror("gettimeofday");

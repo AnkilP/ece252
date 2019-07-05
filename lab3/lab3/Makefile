@@ -6,16 +6,16 @@ CC = gcc
 CFLAGS = -Wall -g -std=c99 
 LD = gcc
 LDFLAGS = -g3 -fsanitize=address -std=c99
-LDLIBS = -pthread -lcurl -lpng -lz
+LDLIBS = -pthread -lcurl -lpng -lz  
 
-LIB_UTIL = zutil.o crc.o catpng.o
-SRCS   = paster2.c crc.c zutil.c catpng.c
+LIB_UTIL = zutil.o crc.o catpng.o shm_stack.o
+SRCS   = paster2.c crc.c zutil.c catpng.c shm_stack.c
 OBJS   = paster2.o $(LIB_UTIL) 
 TARGETS = paster2
 
 all: ${TARGETS}
 
-paster: $(OBJS) 
+paster2: $(OBJS) 
 	$(LD) -o $@ $^ $(LDLIBS) $(LDFLAGS) 
 
 %.o: %.c 
