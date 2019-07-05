@@ -18,10 +18,10 @@
 #define BUF_INC 524288
 
 typedef struct recv_buf2{
-    U8 * buf;
     size_t size;
     size_t max_size;
     int seq;
+    U8 * buf;
 } RECV_BUF;
 
 typedef struct image_stack
@@ -110,7 +110,7 @@ RSTACK *create_image_stack(int size)
     }
 
     mem_size = sizeof_shm_stack(size);
-    pstack = malloc(mem_size);
+    pstack = (RSTACK *) malloc(mem_size);
 
     if ( pstack == NULL ) {
         perror("malloc");
@@ -268,15 +268,6 @@ int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf){
     } 
 }
 
-int checkArray(int * images, int n){
-    for(int i = 0; i < n; ++i){
-        if(images[i] == -1){
-            return 1;
-        }
-    }
-    return 0;
-}
-
 int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * p, int c_sleep) {
 
     recv_buf_init(recv_buf, BUF_INC);
@@ -299,7 +290,9 @@ int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * 
 
 int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img_cat) {
     RECV_BUF * image;
-    pop(p, image);
+    while(!pop(p, image)){
+        sleep(c_sleep > 0 ? c_sleep: 0);
+    }
 
     if(!(*part_num & (1 << (image->seq)))){
         img_cat[image->seq] = (U8 *) malloc(sizeof(image->size));
@@ -313,7 +306,7 @@ int main(int argc, char ** argv) {
     int num_p;
     int num_c;
     int c_sleep;
-    U8 * img_cat[50];
+    U8 ** img_cat;
     double times[2];
     struct timeval tv;
     int shmid;
@@ -355,7 +348,8 @@ int main(int argc, char ** argv) {
     shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * 2, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    if (shmid == -1 ) {
+    int slhmantha = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if (shmid == -1 || shmid_sems == -1 || schmidt == -1 || slhmantha == -1) {
         fprintf(stderr, "shmget error");
         abort();
     }
@@ -393,9 +387,9 @@ int main(int argc, char ** argv) {
             }
 
             curl_easy_cleanup(curl_handle);
-            recv_buf->buf = NULL;
-            recv_buf->size = 0;
-            recv_buf->max_size = 0;
+            recv_buf_cleanup(recv_buf);
+
+            shmdt(image_buffer);
             
             return 0;
             
@@ -420,12 +414,21 @@ int main(int argc, char ** argv) {
             unsigned long part_num = (unsigned long) shmat(schmidt, NULL, 0);
             memset(&part_num, 0, sizeof(part_num));
 
+            img_cat = (U8 ** ) shmat(slhmantha, NULL, 0);
+            memset(img_cat, NULL, 50 * sizeof(img_cat));
+
             if ( image_buffer == (void *) -1) {
                 fprintf(stderr, "shmat error");
                 abort();
             }
 
-            image_processor(image_buffer, c_sleep, &part_num, img_cat);
+            while(!is_empty(image_buffer)){
+                image_processor(image_buffer, c_sleep, &part_num, img_cat);
+            }
+
+            shmdt(image_buffer);
+            shmdt(part_num);
+            shmdt(img_cat);
 
         }
         else if (pid > 1) { //parent process (save all the pids so we can wait)

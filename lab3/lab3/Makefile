@@ -8,8 +8,8 @@ LD = gcc
 LDFLAGS = -g3 -fsanitize=address -std=c99
 LDLIBS = -pthread -lcurl -lpng -lz  
 
-LIB_UTIL = zutil.o crc.o catpng.o shm_stack.o
-SRCS   = paster2.c crc.c zutil.c catpng.c shm_stack.c
+LIB_UTIL = zutil.o crc.o catpng.o 
+SRCS   = paster2.c crc.c zutil.c catpng.c 
 OBJS   = paster2.o $(LIB_UTIL) 
 TARGETS = paster2
 
