@@ -41,10 +41,10 @@ int init_shm_stack(RSTACK *p, int stack_size);
 int sizeof_shm_stack(int size);
 RSTACK *create_image_stack(int size);
 void destroy_stack(RSTACK *p);
-int is_full(RSTACK *p);
+int is_full(RSTACK *p, sem_t * sems);
 int is_empty(RSTACK *p);
-int push(RSTACK *p, RECV_BUF * item);
-int pop(RSTACK *p, RECV_BUF *p_item);
+int push(RSTACK *p, RECV_BUF * item, sem_t * sems);
+int pop(RSTACK *p, RECV_BUF *p_item, sem_t * sems);
 
 int num_iter = 1;
 
@@ -131,12 +131,14 @@ void destroy_stack(RSTACK *p)
     }
 }
 
-int is_full(RSTACK *p)
+int is_full(RSTACK *p, sem_t * sems)
 {
     if ( p == NULL ) {
         return 0;
     }
+    sem_wait(&sems[0]);
     return ( p->pos == (p->size -1) );
+    sem_post(&sems[0]);
 }
 
 int is_empty(RSTACK *p)
@@ -147,30 +149,34 @@ int is_empty(RSTACK *p)
     return ( p->pos == -1 );
 }
 
-int push(RSTACK *p, RECV_BUF * item)
+int push(RSTACK *p, RECV_BUF * item, sem_t * sems)
 {
     if ( p == NULL ) {
         return -1;
     }
 
-    if ( !is_full(p) ) {
+    if ( !is_full(p, sems) ) {
+        sem_wait(&sems[0]);
         ++(p->pos);
         memcpy(&(p->items[p->pos]), item, sizeof(*item));
+        sem_post(&sems[0]);
         return 0;
     } else {
         return -1;
     }
 }
 
-int pop(RSTACK *p, RECV_BUF *p_item)
+int pop(RSTACK *p, RECV_BUF *p_item, sem_t * sems)
 {
     if ( p == NULL ) {
         return -1;
     }
 
     if ( !is_empty(p) ) {
+        sem_wait(&sems[0]);
         *p_item = p->items[p->pos];
         (p->pos)--;
+        sem_post(&sems[0]);
         return 0;
     } else {
         return 1;
@@ -265,10 +271,13 @@ int curl_main(CURL * curl_handle, char * url, RECV_BUF * recv_buf){
 
     if( res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        return -1;
     } 
+
+    return 0;
 }
 
-int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * p, int c_sleep) {
+int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * p, int c_sleep, sem_t * sems) {
 
     recv_buf_init(recv_buf, BUF_INC);
 
@@ -281,24 +290,30 @@ int image_producer(char* url, CURL * curl_handle, RECV_BUF * recv_buf, RSTACK * 
     }
 
     curl_main(curl_handle, url, recv_buf);
-    while(!push(p, recv_buf)){
+    while(!push(p, recv_buf, sems)){
         sleep(c_sleep > 0 ? c_sleep : 500);
     }
 
     return 0;
 }
 
-int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img_cat) {
+int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img_cat, sem_t * sems) {
     RECV_BUF * image;
-    while(!pop(p, image)){
+    while(!pop(p, image, sems)){
         sleep(c_sleep > 0 ? c_sleep: 0);
     }
 
+    sem_wait(&sems[1]);
     if(!(*part_num & (1 << (image->seq)))){
         img_cat[image->seq] = (U8 *) malloc(sizeof(image->size));
-        img_cat[image->seq] = image->buf;
+        memcpy(img_cat[image->seq], image->buf, image->size);
+        *part_num |= 1 << (image->seq);
     }
+    sem_post(&sems[1]);
 
+    free(image);
+
+    return 0;
 }
 
 int main(int argc, char ** argv) {
@@ -309,12 +324,12 @@ int main(int argc, char ** argv) {
     U8 ** img_cat;
     double times[2];
     struct timeval tv;
-    int shmid;
-    int schmidt;
+    unsigned long part_num;
     pid_t pid;
     int pstate;
 
     RSTACK * image_buffer;
+    sem_t *sems;
     
     if (argc < 6) {
         fprintf(stderr, "Not enough arguments to run paster2 command.\n");
@@ -333,7 +348,6 @@ int main(int argc, char ** argv) {
     num_p = atoi(argv[2]);
     num_c = atoi(argv[3]);
     c_sleep = atoi(argv[4]);
-    int image_id = atoi(argv[5]);    
 
     pid_t cpids[num_p + num_c];
 
@@ -345,9 +359,9 @@ int main(int argc, char ** argv) {
     srand((unsigned) time(&t));
 
     int shmsize = sizeof_shm_stack(buffer_size);
-    shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * 2, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int slhmantha = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid == -1 || shmid_sems == -1 || schmidt == -1 || slhmantha == -1) {
         fprintf(stderr, "shmget error");
@@ -363,6 +377,17 @@ int main(int argc, char ** argv) {
         if (pid == 0) { //child process (producer, use this to download png data)
             image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
             init_shm_stack(image_buffer, buffer_size);
+
+            sems = (sem_t *) shmat(shmid_sems, NULL, 0);
+
+            if ( sem_init(&sems[0], 1, 1) != 0 ) {
+                perror("sem_init(sem[0])");
+                abort();
+            }
+            if ( sem_init(&sems[1], 1, 1) != 0 ) {
+                perror("sem_init(sem[1])");
+                abort();
+            }
             
             if ( image_buffer == (void *) -1 ) {
                 fprintf(stderr, "shmat error");
@@ -377,12 +402,12 @@ int main(int argc, char ** argv) {
             if(num_p >= 50){
                 sprintf(stringz,"%d",i % 50);
                 curr_url = strcat(url, stringz);
-                image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep);
+                image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
             }
             else{
                 for(int j = 0; j < 50/num_p + (50 % num_p != 0); ++j){
                     sprintf(stringz, "%d", i * (50/num_p + (50 % num_p != 0)) + j); 
-                    image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep);
+                    image_producer(curr_url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
                 }
             }
 
@@ -390,6 +415,7 @@ int main(int argc, char ** argv) {
             recv_buf_cleanup(recv_buf);
 
             shmdt(image_buffer);
+            shmdt(sems);
             
             return 0;
             
@@ -411,11 +437,22 @@ int main(int argc, char ** argv) {
             image_buffer = (RSTACK *) shmat(shmid, NULL, 0);
             init_shm_stack(image_buffer, buffer_size);
 
-            unsigned long part_num = (unsigned long) shmat(schmidt, NULL, 0);
+            part_num = (unsigned long) shmat(schmidt, NULL, 0);
             memset(&part_num, 0, sizeof(part_num));
 
             img_cat = (U8 ** ) shmat(slhmantha, NULL, 0);
-            memset(img_cat, NULL, 50 * sizeof(img_cat));
+            memset(img_cat, 0, 50 * sizeof(img_cat));
+
+            sems = (sem_t *) shmat(shmid_sems, NULL, 0);
+
+            if ( sem_init(&sems[0], 1, 1) != 0 ) {
+                perror("sem_init(sem[0])");
+                abort();
+            }
+            if ( sem_init(&sems[1], 1, 1) != 0 ) {
+                perror("sem_init(sem[1])");
+                abort();
+            }
 
             if ( image_buffer == (void *) -1) {
                 fprintf(stderr, "shmat error");
@@ -423,12 +460,15 @@ int main(int argc, char ** argv) {
             }
 
             while(!is_empty(image_buffer)){
-                image_processor(image_buffer, c_sleep, &part_num, img_cat);
+                image_processor(image_buffer, c_sleep, &part_num, img_cat, sems);
             }
 
             shmdt(image_buffer);
-            shmdt(part_num);
+            shmdt(&part_num);
             shmdt(img_cat);
+            shmdt(sems);
+
+            return 0;
 
         }
         else if (pid > 1) { //parent process (save all the pids so we can wait)
@@ -449,6 +489,11 @@ int main(int argc, char ** argv) {
             }
         }
 
+        shmctl( shmid, IPC_RMID, NULL );
+        shmctl( shmid_sems, IPC_RMID, NULL );
+        shmctl( schmidt, IPC_RMID, NULL );
+        shmctl( slhmantha, IPC_RMID, NULL );
+
         concatenatePNG(img_cat, 50);
 
         for(int i = 0; i < 50; ++i){
@@ -456,6 +501,9 @@ int main(int argc, char ** argv) {
         }
 
         curl_global_cleanup();
+
+        free(image_buffer);
+        free(sems);
 
         if (gettimeofday(&tv, NULL) != 0) {
             perror("gettimeofday");
