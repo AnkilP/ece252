@@ -326,7 +326,6 @@ int main(int argc, char ** argv) {
     int num_c;
     int c_sleep;
     U8 ** img_cat;
-    U8 ** img_cat_cpy;
     double times[2];
     struct timeval tv;
     unsigned long part_num;
@@ -372,7 +371,7 @@ int main(int argc, char ** argv) {
     int shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sems = shmget(IPC_PRIVATE, sizeof(sem_t) * 2, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int schmidt = shmget(IPC_PRIVATE, sizeof(unsigned long), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    int slhmantha = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int slhmantha = shmget(IPC_PRIVATE, 50 * BUF_INC, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if (shmid == -1 || shmid_sems == -1 || schmidt == -1 || slhmantha == -1) {
         fprintf(stderr, "shmget error");
         abort();
@@ -381,7 +380,7 @@ int main(int argc, char ** argv) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     // forking producer processes
-    for (int i = 0; i < num_p; i++) {
+    for (int i = 1; i <= num_p; i++) {
         pid = fork();
 
         if (pid == 0) { //child process (producer, use this to download png data)
@@ -411,15 +410,17 @@ int main(int argc, char ** argv) {
             char stringz[20];
             //while(some condition related to getting all the image parts)
             if(num_p >= 50){
-                sprintf(stringz,"%d",i % 50);
+                sprintf(stringz,"%d",(i - 1) % 50);
                 strcat(url, stringz);
                 image_producer(url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
             }
             else{
-                for(int j = 0; j < 50/num_p + (50 % num_p != 0); ++j){
+                for(int j = 0; j < 50/(num_p) + (50 % num_p != 0); ++j){
                     // printf("Downloading images\n");
-                    sprintf(stringz, "%d", i * (50/num_p + (50 % num_p != 0)) + j); 
+                    sprintf(stringz, "%d", i + j - 1); 
                     strcat(url, stringz);
+                    printf(url);
+                    printf("\n");
                     image_producer(url, curl_handle, recv_buf, image_buffer, c_sleep, sems);
                 }
             }
@@ -455,8 +456,8 @@ int main(int argc, char ** argv) {
             part_num = (unsigned long) shmat(schmidt, NULL, 0);
             memset(&part_num, 0, sizeof(part_num));
 
-            img_cat = (U8 ** ) shmat(slhmantha, NULL, 0);
-            memset(img_cat, 0, 50 * sizeof(img_cat));
+            img_cat = (U8 **) shmat(slhmantha, NULL, 0);
+            img_cat = (U8 **) (img_cat + sizeof(img_cat));
 
             sems = (sem_t *) shmat(shmid_sems, NULL, 0);
 
