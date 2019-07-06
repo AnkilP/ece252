@@ -308,8 +308,7 @@ int image_processor(RSTACK * p, int c_sleep, unsigned long * part_num, U8 ** img
 
     sem_wait(&sems[1]);
     if(!(*part_num & (1 << (image->seq)))){
-        img_cat[image->seq] = (U8 *) malloc(sizeof(image->size));
-        memcpy(img_cat[image->seq], image->buf, image->size);
+        memcpy(img_cat[0][image->seq], image->buf, image->size);
         *part_num |= 1 << (image->seq);
     }
     sem_post(&sems[1]);
@@ -325,7 +324,7 @@ int main(int argc, char ** argv) {
     int num_p;
     int num_c;
     int c_sleep;
-    U8 ** img_cat;
+    U8 * (*img_cat)[50];
     double times[2];
     struct timeval tv;
     unsigned long part_num;
@@ -456,8 +455,8 @@ int main(int argc, char ** argv) {
             part_num = (unsigned long) shmat(schmidt, NULL, 0);
             memset(&part_num, 0, sizeof(part_num));
 
-            img_cat = (U8 **) shmat(slhmantha, NULL, 0);
-            img_cat = (U8 **) (img_cat + sizeof(img_cat));
+            img_cat = (U8 *(*)[50]) shmat(slhmantha, NULL, 0);
+            // img_cat = (U8 **) (img_cat + sizeof(img_cat));
 
             sems = (sem_t *) shmat(shmid_sems, NULL, 0);
 
