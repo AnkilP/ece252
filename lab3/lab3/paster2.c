@@ -30,7 +30,7 @@ typedef struct image_stack
 {
     int size;         /* the max capacity of the stack */
     int pos;          /* position of last item pushed onto the stack */
-    volatile RECV_BUF* items; /* stack of stored curl bufs */
+    volatile RECV_BUF** items; /* stack of stored curl bufs */
 } RSTACK;
 
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
@@ -92,13 +92,13 @@ int init_shm_stack(RSTACK *p, int stack_size)
 
     p->size = stack_size;
     p->pos = -1;
-    p->items = (volatile RECV_BUF *)(p + sizeof(RSTACK));
+    p->items = (volatile RECV_BUF **)(p + sizeof(RSTACK));
     return 0;
 }
 
 int sizeof_shm_stack(int size)
 {
-    return (sizeof(RSTACK) + sizeof(RECV_BUF) * size);
+    return (sizeof(RSTACK) + sizeof(RECV_BUF*) * size);
 }
 
 RSTACK *create_image_stack(int size)
@@ -154,49 +154,6 @@ int is_empty(RSTACK *p)
     }
 
     return (p->pos == -1);
-}
-
-int push(RSTACK* p, volatile RECV_BUF* item)
-{
-    if (p == NULL)
-    {
-        printf("stack null\n");
-        return -1;
-    }
-
-    if (!is_full(p))
-    {
-        (p->pos)++;
-        memcpy(&(p->items[p->pos]), item, sizeof(*item));
-        printf("%x\n", item->buf);
-        printf("%d: %x @ %x\n", p->pos, p->items[p->pos].buf, &(p->items[p->pos]));
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
-}
-
-int pop(RSTACK* p, volatile RECV_BUF* p_item)
-{
-    if (p == NULL)
-    {
-        printf("stack null\n");
-        return -1;
-    }
-
-    if (!is_empty(p))
-    {
-        printf("%d: %x\n", p->pos, &(p->items[p->pos]));
-        memcpy(p_item, &(p->items[p->pos]), sizeof(p->items[p->pos]));
-        (p->pos)--;
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
 }
 
 /**
@@ -299,23 +256,72 @@ int curl_main(CURL *curl_handle, char *url, volatile RECV_BUF *recv_buf)
     return 0;
 }
 
+
+int push(RSTACK* p, volatile RECV_BUF* item)
+{
+    if (p == NULL)
+    {
+        return -1;
+    }
+
+    if (!is_full(p))
+    {
+        void* tmp = p;
+        ++(p->pos);
+        printf("%ld\n", sizeof(*item));
+        memcpy(tmp, item, sizeof(*item));
+        tmp += sizeof(*item);
+        memcpy(tmp, item->size, sizeof(size_t));
+        tmp += 4;
+        memcpy(tmp, item->buf, item->size);    
+        printf("%d: %hhn @ %x\n", p->pos, p->items[p->pos]->buf, p->items[p->pos]);
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+int pop(RSTACK* p, volatile RECV_BUF* p_item)
+{
+    if (p == NULL)
+    {
+        return -1;
+    }
+
+    if (!is_empty(p))
+    {
+        printf("%d: %x\n", p->pos, p->items[p->pos]);
+        memcpy(p_item, p->items[p->pos], (sizeof(unsigned int) * 2) + sizeof(int) + (sizeof(U8) * p_item->size));
+        memcpy(p_item->buf, p->items[p->pos]->buf, p->items[p->pos]->size);
+        (p->pos)--;
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
+}
+
 int image_producer(char *url, CURL *curl_handle, RSTACK *p, int *part_num, sem_t *sems, sem_t *space, sem_t *item)
 {
-    volatile RECV_BUF* recv_buf = malloc(sizeof(*recv_buf));
-    recv_buf_init(recv_buf, BUF_INC);
+    volatile RECV_BUF recv_buf;
+    recv_buf_init(&recv_buf, BUF_INC);
 
     printf("grabbing from: %s\n", url);
     curl_main(curl_handle, url, &recv_buf);
-    printf("pushing data: %ld, stack: %d, stack size: %d\n", recv_buf->size, (p->pos) + 1, p->size);
+    printf("pushing data: %ld, stack: %d, stack size: %d\n", recv_buf.size, (p->pos) + 1, p->size);
 
     sem_wait(space);
     sem_wait(sems);
-    push(p, recv_buf);
+    push(p, &recv_buf);
     (*part_num)++;
     sem_post(sems);
     sem_post(item);
 
-    printf("pushed data: %ld, stack: %d\n", recv_buf->size, (p->pos) + 1);
+    printf("pushed size: %ld, stack: %d\n", p->items[p->pos]->size, (p->pos) + 1);
+    printf("pushed data: %hhn,\n", p->items[p->pos]->buf);
     recv_buf_cleanup(&recv_buf);
 
     return 0;
@@ -323,22 +329,24 @@ int image_producer(char *url, CURL *curl_handle, RSTACK *p, int *part_num, sem_t
 
 int image_processor(RSTACK *p, int c_sleep, int *consumed, U8 **img_cat, sem_t *sems, sem_t *space, sem_t *item)
 {
-    volatile RECV_BUF* image = malloc(sizeof(*image));
-    recv_buf_init(image, BUF_INC);
+    volatile RECV_BUF image;
+    recv_buf_init(&image, BUF_INC);
 
     sem_wait(item);
+    // printf("popping size: %ld, stack: %d\n", p->items[p->pos]->size, (p->pos) + 1);
+    // printf("popping data: %x,\n", p->items[p->pos]->buf);
     sem_wait(sems);
     printf("popping\n");
-    pop(p, image);
+    pop(p, &image);
     sem_post(sems);
     sem_post(space);
 
     usleep(c_sleep * 1000);
 
-    img_cat[image->seq] = malloc(sizeof(image->size));
-    memcpy(img_cat[image->seq], image->buf, image->size);
+    img_cat[image.seq] = malloc(image.size);
+    memcpy(img_cat[image.seq], image.buf, image.size);
     (*consumed)++;
-    printf("processed data: %ld, stack size: %d, img_cat done: %d\n", image->size, (p->pos) + 1, image->seq);
+    printf("processed data: %ld, stack size: %d, img_cat done: %d\n", image.size, (p->pos) + 1, image.seq);
     recv_buf_cleanup(&image);
     return 0;
 }
@@ -394,15 +402,15 @@ int main(int argc, char **argv)
     srand((unsigned)time(&t));
 
     int shmsize = sizeof_shm_stack(buffer_size);
-    int shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    printf("image buffer size: %d\n", shmsize);
+    int shmid = shmget(IPC_PRIVATE, shmsize, IPC_CREAT | IPC_EXCL | 0666);
     int shmid_sem = shmget(IPC_PRIVATE, sizeof(sem_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sem_space = shmget(IPC_PRIVATE, sizeof(sem_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int shmid_sem_item = shmget(IPC_PRIVATE, sizeof(sem_t), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int schmidprod = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     int schmidt = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    int slhmantha = shmget(IPC_PRIVATE, 50 * BUF_INC, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 
-    if (shmid == -1 || shmid_sem == -1 || shmid_sem_space == -1 || shmid_sem_item == -1 || schmidprod == -1 || schmidt == -1 || slhmantha == -1)
+    if (shmid == -1 || shmid_sem == -1 || shmid_sem_space == -1 || shmid_sem_item == -1 || schmidprod == -1 || schmidt == -1)
     {
         fprintf(stderr, "shmget error");
         abort();
@@ -423,7 +431,7 @@ int main(int argc, char **argv)
             sem_t *space = shmat(shmid_sem_space, NULL, 0);
             sem_t *item = shmat(shmid_sem_item, NULL, 0);
             int *part_num = shmat(schmidprod, NULL, 0);
-            RSTACK *image_buffer = shmat(shmid, NULL, 0);
+            RSTACK* image_buffer = (RSTACK*) shmat(shmid, NULL, 0);
             if (image_buffer == (void *)-1)
             {
                 fprintf(stderr, "shmat error");
@@ -511,6 +519,7 @@ int main(int argc, char **argv)
 
             shmdt(image_buffer);
             shmdt(sems);
+            shmdt(part_num);
 
             free(url_part);
             return 0;
@@ -536,7 +545,7 @@ int main(int argc, char **argv)
             if (cpid == 0)
             { //child process (consumer, use this to take the downloaded png data from our fixed buffer and put it into our global structure)
                 printf("creating a new consumer process\n");
-                RSTACK* image_buffer_c = shmat(shmid, NULL, 0);
+                RSTACK* image_buffer_c = (RSTACK*) shmat(shmid, NULL, 0);
                 if (image_buffer_c == (void *)-1)
                 {
                     fprintf(stderr, "shmat error");
@@ -547,25 +556,25 @@ int main(int argc, char **argv)
                 sem_t *sems_c = shmat(shmid_sem, NULL, 0);
                 sem_t *space = shmat(shmid_sem_space, NULL, 0);
                 sem_t *item = shmat(shmid_sem_item, NULL, 0);
-                if (*part_num_c == 0)
-                {
-                    if (sem_init(sems_c, 1, 1) != 0)
-                    {
-                        perror("sem_init(sem_c)");
-                        abort();
-                    }
-                    if (sem_init(space, 1, buffer_size) != 0)
-                    {
-                        perror("sem_init(space)");
-                        abort();
-                    }
-                    if (sem_init(item, 1, 0) != 0)
-                    {
-                        perror("sem_init(item)");
-                        abort();
-                    }
-                    init_shm_stack(image_buffer_c, buffer_size);
-                }
+                // if (*part_num_c == 0)
+                // {
+                //     if (sem_init(sems_c, 1, 1) != 0)
+                //     {
+                //         perror("sem_init(sem_c)");
+                //         abort();
+                //     }
+                //     if (sem_init(space, 1, buffer_size) != 0)
+                //     {
+                //         perror("sem_init(space)");
+                //         abort();
+                //     }
+                //     if (sem_init(item, 1, 0) != 0)
+                //     {
+                //         perror("sem_init(item)");
+                //         abort();
+                //     }
+                //     init_shm_stack(image_buffer_c, buffer_size);
+                // }
 
                 while (1)
                 {
@@ -584,6 +593,8 @@ int main(int argc, char **argv)
                 shmdt(image_buffer_c);
                 shmdt(part_num_c);
                 shmdt(sems_c);
+                shmdt(space);
+                shmdt(item);
 
                 return 0;
             }
@@ -619,7 +630,6 @@ int main(int argc, char **argv)
         shmctl(shmid_sem_item, IPC_RMID, NULL);
         shmctl(schmidprod, IPC_RMID, NULL);
         shmctl(schmidt, IPC_RMID, NULL);
-        shmctl(slhmantha, IPC_RMID, NULL);
 
         curl_global_cleanup();
 
