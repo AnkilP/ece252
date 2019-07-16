@@ -1,7 +1,4 @@
-
-
 #include "curl_helper.h"
-#include "curl_main.h"
 
 int main(int argc, char** argv) {
     int c;
