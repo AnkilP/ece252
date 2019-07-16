@@ -30,10 +30,11 @@ int add_to_hashmap(hashmapz * t, chat * url, sem_t * web_protect){
         }
     }
     else{
-        return 1;
+        return 2;
     }
 }
 
-int delete_hashmap(){
+int delete_hashmap(hashmapz * t){
     hdestroy();
+    free(t);
 }

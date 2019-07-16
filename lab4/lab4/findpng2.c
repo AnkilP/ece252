@@ -1,5 +1,13 @@
 #include "hashmap.h"
 
+sem_t web_protect; // used to block access to the hashmap
+
+void * retrieve_html(void * arg){
+    // arg should have url
+    
+}
+
+
 int main(int argc, char** argv) {
     int c;
     int t = 1;
@@ -15,6 +23,9 @@ int main(int argc, char** argv) {
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
 
+    hashmapz * tableau = (hashmapz *)malloc(sizeof(hashmapz));
+
+    // read input command line arguments
     while (argc>1 && (c = getopt (argc, argv, "t:m:v:")) != -1) {
         switch (c) {
             case 't':
@@ -51,5 +62,11 @@ int main(int argc, char** argv) {
         strcpy(url, argv[optind]);
     }
 
+    create_hash_map(tableau, m); // create global hashmap
+    add_to_hashmap(tableau, url, web_protect);
+    // start threads
+
+
+    delete_hashmap(tableau); // cleanup everything for hashmap
 
 }

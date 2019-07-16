@@ -12,4 +12,4 @@ typedef struct hashmapz{
 
 int create_hash_map(hashmapz * t, int size);
 int add_to_hashmap(hashmapz * t, char * url, sem_t * web_protect);
-int delete_hashmap();
+int delete_hashmap(hashmapz * t);
