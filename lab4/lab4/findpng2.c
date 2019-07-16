@@ -1,10 +1,10 @@
-#include "curl_helper.h"
+#include "hashmap.h"
 
 int main(int argc, char** argv) {
     int c;
     int t = 1;
     int m = 50;
-    char* logFile;
+    char logFile[256];
     char* seedurl;
 
     CURL *curl_handle;
@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
 
-    while (argc>1 && (c = getopt (argc, argv, "t:m:")) != -1) {
+    while (argc>1 && (c = getopt (argc, argv, "t:m:v:")) != -1) {
         switch (c) {
             case 't':
                 t = strtoul(optarg, NULL, 10);

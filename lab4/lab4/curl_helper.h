@@ -38,6 +38,17 @@
 #include <libxml/xpath.h>
 #include <libxml/uri.h>
 
+#include <pthread.h>
+#include <sys/shm.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+#include <sys/types.h>
+
+#include "search"
+
 
 #define SEED_URL "http://ece252-1.uwaterloo.ca/lab4/"
 #define ECE252_HEADER "X-Ece252-Fragment: "
