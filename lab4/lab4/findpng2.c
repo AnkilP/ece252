@@ -119,7 +119,8 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    create_hash_map(all_visited_url, 2 * m); // create global hashmap
+    int tempz = create_hash_map(all_visited_url, 2 * m); // create global hashmap
+    printf("%i\n", tempz);
     add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
 
     create_hash_map(pngTable, m);

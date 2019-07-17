@@ -12,8 +12,13 @@
 typedef struct hashtable{
     struct hsearch_data htab;
     int size;
-    ENTRY e, *ep;
 } Hashtable;
+
+#define HASHTABLE_INITIALIZER                                                    \
+  (Hashtable)                                                                    \
+  {                                                                            \
+    .htab = (struct hsearch_data){ 0 }, .size = 0                              \
+  }
 
 int create_hash_map(Hashtable * t, int size);
 int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock);
