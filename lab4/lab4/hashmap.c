@@ -11,15 +11,16 @@ int create_hash_map(hashmapz * t, int size){
     return 1;
 }
 
-int add_to_hashmap(hashmapz * t, chat * url, sem_t * web_protect){
+int add_to_hashmap(hashmapz * t, chat * url, sem_t * web_protect, int * iter){
     t->e.key = url;
     sem_wait(web_protect);
     t->ep = hsearch(t->e, FIND);
-    sem_post(web_protect);
+    // sem_post(web_protect);
     if(!ep){
         this->e.data = (void *) 1;
-        sem_wait(web_protect);
+        // sem_wait(web_protect);
         t->ep = hsearch(this->e, ENTER);
+        
         sem_post(web_protect);
         if(t->ep == NULL){
             fprintf(stderr, "hashmap entry failed");

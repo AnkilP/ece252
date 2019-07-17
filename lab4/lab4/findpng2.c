@@ -2,14 +2,18 @@
 
 sem_t web_protect; // used to block access to the hashmap
 
-typedef struct html_struct{
+typedef struct html{
+    int m;
+    int iter;
     char * seedurl;
-    pthread_cond_t cancellation_token;
     hashmapz * t;
-};
+    url_node * sentinel;
+    url_node * temp_previous;
+    url_node * iterant;
+} html_struct;
 
 void * retrieve_html(void * arg){
-    // arg should have url
+    // arg should have url, condition var, pointer to hashmap
 
     CURL *curl;
     CURLcode res;
@@ -19,25 +23,27 @@ void * retrieve_html(void * arg){
     html_struct * html_data = (html_struct *)arg;
 
     //local buffer to hold 50 urls - this performs a dfs search
-    url_node * sentinel = (url_nonde * )malloc(sizeof(url_node));
-    url_node * temp_previous = add_to_stack(sentinel, html->url);
-    url_node * iterant;
 
     // cancellation token is triggered when the frontier is empty
-    while(!html_data->cancellation_token){
+    while(html_data->iter < html_data->m || iterant != NULL){
 
         // pop from frontier
         url = pop_from_stack(temp_previous, iterant);
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(html_data->t, url, web_protect) == 1){
+        if(add_to_hashmap(html_data->t, url, web_protect, &html_data->iter) == 1){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
+
+
 
             process_data(curl, recv_buf, iterant); // adds to the local stack
         }
 
-        temp_previous = iterant;
+        if(iterant == NULL){
+            pthread_cond
+        }
+        temp_previous = iterant; // resetting the pointer
 
     }
 
@@ -109,6 +115,10 @@ int main(int argc, char** argv) {
     create_hash_map(tableau, m); // create global hashmap
     add_to_hashmap(tableau, url, web_protect);
     // start threads
+    url_node * sentinel = (url_nonde * )malloc(sizeof(url_node));
+    url_node * temp_previous = add_to_stack(sentinel, html->url);
+    url_node * iterant;
+    //populate html_struct
 
 
     delete_hashmap(tableau); // cleanup everything for hashmap
