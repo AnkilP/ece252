@@ -347,7 +347,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthre
     }
 
     if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf, htmlz, frontier_lock);
+        return process_html(curl_handle, p_recv_buf, html, frontier_lock);
     } else if ( strstr(ct, CT_PNG) ) {
         return process_png(curl_handle, p_recv_buf, pngTable, pngStack);
     } else {
