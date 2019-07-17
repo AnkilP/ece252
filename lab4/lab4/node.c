@@ -1,6 +1,6 @@
 #include "node.h"
 
-static url_node * add_to_stack(url_node * previous, char * url){
+static url_node * add_to_stack(url_node * previous, char * url, pthread_cond_t * frontier_lock){
     url_node * e;
 
     e = (url_node *) malloc(sizeof(url_node));
@@ -9,8 +9,10 @@ static url_node * add_to_stack(url_node * previous, char * url){
         exit(EXIT_FAILURE);
     }
 
-    insque(e, previous);
     e->url = url;
+    pthread_rwlock_wrlock(frontier_lock);
+    insque(e, previous);
+    pthread_rwlock_unlock(frontier_lock);
     previous = e;
     return e; // incrementing stack pointer
 }

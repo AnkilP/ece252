@@ -38,7 +38,7 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_rwlock_t * frontier_lock)
 {
 
     int i;
@@ -65,7 +65,7 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
                 printf("href: %s\n", href);
-                add_to_stack(htmlz, href);
+                add_to_stack(htmlz, href, frontier_lock);
             }
             xmlFree(href);
         }

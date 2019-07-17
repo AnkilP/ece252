@@ -1,6 +1,7 @@
 #include "hashmap.h"
 
 pthread_rwlock_t rwlock;
+pthread_rwlock_t frontier_lock;
 
 typedef struct html{
     int m;
@@ -60,6 +61,7 @@ int main(int argc, char** argv) {
     RECV_BUF recv_buf;
 
     pthread_rwlock_init( &rwlock, NULL );
+    pthread_rwlock_init( &frontier_lock, NULL );
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
