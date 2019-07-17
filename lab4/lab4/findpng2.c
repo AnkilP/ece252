@@ -1,18 +1,34 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sync.h>
+#include <curl/curl.h>
+#include <pthread.h>
 #include "hashmap.h"
-
-pthread_rwlock_t rwlock;
-pthread_rwlock_t frontier_lock;
-
-int iter = 0;
 
 typedef struct html{
     int m;
     int iter;
     char * seedurl;
-    hashmapz * t;
+    Hashtable * t;
     url_node * sentinel;
     url_node * temp_previous;
 } html_struct;
+
+void* retrieve_html(void* arg);
+
+//For accessing the url frontier hashmap
+pthread_mutex_t frontier;
+pthread_rwlock_t pngStack; //For accessing the png url stack
+pthread_rwlock_t visitedStack; //For accessing the visited url stack
+
+Hashtable* all_visited_url;
+Hashtable* png_url;
+url_node* url_frontier;
+
+int totalRetrievedPng = 0;
 
 void * retrieve_html(void * arg){
     // arg should have url, condition var, pointer to hashmap
@@ -21,19 +37,29 @@ void * retrieve_html(void * arg){
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
-    
-    html_struct * html_data = (html_struct *)arg;
+    int required_png = (int) arg;
+    int pngnum;
+    //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
+    while(1) {
+        //Check to see if we have reached our required png amount
+        __sync_fetch_and_add(&totalRetrievedPng, 0);
+        if (totalRetrievedPng == required_png) {
+            break;
+        }
 
-    //local buffer to hold 50 urls - this performs a dfs search
+        //We still havent reached png limit
+        //Get a new url from frontier
+        pthread_mutex_lock(&frontier);
+        url = pop_from_stack(url_frontier);
+        pthread_mutex_unlock(&frontier);
 
-    // cancellation token is triggered when the frontier is empty
-    while(html_data->iter < html_data->m || html_data->temp_previous != NULL){
-
-        // pop from frontier
-        pop_from_stack(html_data->temp_previous, &frontier_lock, url);
+        //Frontier is empty, we leave this thread
+        if (url == NULL) {
+            break;
+        }
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(html_data->t, url, &rwlock, &(html_data->iter)) == 1){
+        if(add_to_hashmap(all_visited_url, url, &visitedStack, &(html_data->iter)) == 1) {
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
@@ -46,8 +72,12 @@ void * retrieve_html(void * arg){
     // each thread starts with a specific url in its frontier
 
     // it then visits that webpage and adds urls to its global url frontier
-    
+
     return;
+}
+
+int writeToFile() {
+
 }
 
 
@@ -58,16 +88,15 @@ int main(int argc, char** argv) {
     char logFile[256];
     char url[256];
 
-    pthread_rwlock_init( &rwlock, NULL );
-    pthread_rwlock_init( &frontier_lock, NULL );
+    pthread_rwlock_init(&pngStack, NULL);
+    pthread_rwlock_init(&visitedStack, NULL);
+    pthread_mutex_init(&frontier, NULL);
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
 
-    hashmapz * tableau = (hashmapz *)malloc(sizeof(hashmapz));
-
     // read input command line arguments
-    while (argc>1 && (c = getopt (argc, argv, "t:m:v:")) != -1) {
+    while (argc > 1 && (c = getopt (argc, argv, "-t:m:v:")) != -1) {
         switch (c) {
             case 't':
                 t = strtoul(optarg, NULL, 10);
@@ -86,21 +115,19 @@ int main(int argc, char** argv) {
             case 'v':
                 strcpy(logFile, optarg);
                 if (strlen(logFile) <= 0) {
-                    fprintf(stderr, "%s: Please supply log file name -- 'v'\n", argv[0], str);
+                    fprintf(stderr, "%s: Please supply log file name -- 'v'\n", argv[0]);
                     return -1;
                 }
                 break;
+            case 1:
+                strcpy(url, optarg);
+                if (strlen(url) <= 0) {
+                    fprintf(stderr, "%s: Please supply a SEED URL as argument\n", argv[0]);
+                    return -1;
+                }
             default:
                 break;
         }
-    }
-
-    if (argv[optind] == NULL) {
-        printf("SEED URL missing\n");
-        return -1;
-    }
-    else {
-        strcpy(url, argv[optind]);
     }
 
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
@@ -135,7 +162,9 @@ int main(int argc, char** argv) {
         free(&p_res[i]);
     }
 
-    delete_hashmap(tableau); // cleanup everything for hashmap
+    delete_hashmap(url_frontier); // cleanup everything for hashmap
+    free(pngStack);
+    free(visitedStack);
     free(html_args);
     cleanup_stack(sentinel);
 }
