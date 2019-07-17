@@ -1,16 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sync.h>
-#include <curl/curl.h>
-#include <pthread.h>
 #include "hashmap.h"
 
 typedef struct html{
-    int m;
-    int iter;
     char * seedurl;
     Hashtable * t;
     url_node * sentinel;
@@ -36,7 +26,10 @@ void * retrieve_html(void * arg){
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
-    int required_png = (int) arg;
+
+    html_struct * html = (html_struct * ) arg;
+
+    int required_png = html->t->size;
     int pngnum;
     //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
     while(1) {
@@ -56,7 +49,7 @@ void * retrieve_html(void * arg){
         }
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(all_visited_url, url, &visitedStack, &(html_data->iter)) == 1) {
+        if(add_to_hashmap(all_visited_url, url, &visitedStack, &(totalRetrievedPng)) == 1) {
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
@@ -130,19 +123,17 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    create_hash_map(tableau, m); // create global hashmap
-    add_to_hashmap(tableau, url, &rwlock, &iter);
+    create_hash_map(all_visited_url, m); // create global hashmap
+    add_to_hashmap(all_visited_url, url, &visitedStack, &totalRetrievedPng); // add the seed url
 
     url_node * sentinel = (url_node * )malloc(sizeof(url_node));
-    url_node * temp_previous = add_to_stack(sentinel, url, &frontier_lock);
+    url_frontier = add_to_stack(sentinel, url, &frontier_lock);
     //populate html_struct
     html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
-    html_args->iter = 1;
-    html_args->m = m;
     html_args->seedurl = url;
     html_args->sentinel = sentinel;
-    html_args->t = tableau;
-    html_args->temp_previous = temp_previous;
+    html_args->t = all_visited_url;
+    html_args->temp_previous = url_frontier;
 
     // start threads
     for (int i = 0; i < t; i++) {
@@ -159,9 +150,10 @@ int main(int argc, char** argv) {
         free(&p_res[i]);
     }
 
-    delete_hashmap(url_frontier); // cleanup everything for hashmap
-    free(pngStack);
-    free(visitedStack);
+    pthread_rwlock_destroy( &pngStack );
+    pthread_rwlock_destroy( &visitedStack);
+    pthread_rwlock_destroy( &frontier_lock );
     free(html_args);
-    cleanup_stack(sentinel);
+    cleanup_stack(sentinel); // this takes care of temp_previous as well
+    delete_hashmap(all_visited_url);
 }

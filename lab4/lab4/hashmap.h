@@ -1,10 +1,7 @@
 // this is a wrapper "thing" (im not sure what non-oop guys call it)
 // to help augment the glibc hashmap thing to be thread safety
 
-//NOTE: this is only made for a single hashmap - cannot be extended to multiple parallel hashmaps
-
-#include <serach.h>
-#include "curl_helper.h"
+#include "curl_helper.h" // this has search.h in it - I dont like polluting the namespace
 
 typedef struct hashmap{
     struct hsearch_data htab;
