@@ -1,6 +1,7 @@
 #include "hashmap.h"
 
 int create_hash_map(Hashtable * t, int size){
+    t = (Hashtable * )malloc(sizeof(Hashtable));
     if(size > 0){
         t->size = size;
     }
