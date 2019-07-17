@@ -16,8 +16,8 @@ int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * it
     pthread_rwlock_wrlock( rwlock );
     hsearch_r(t->e, FIND, &t->ep, &t->htab); // populate ep with the value
     // sem_post(web_protect);
-    if(!ep){
-        this->e.data = (void *) 1;
+    if(!t->ep){
+        t->e.data = (void *) 1;
         // sem_wait(web_protect);
         hsearch_r(t->e, ENTER, &t->ep, &t->htab);
         *iter++;
@@ -40,7 +40,7 @@ int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
     pthread_rwlock_rdlock(rwlock);
     t->e.key = url;
     hsearch_r(t->e, FIND, &t->ep, &t->htab);
-    if(ep){
+    if(t->ep){
         pthread_rwlock_unlock(rwlock);
         return 1;
     }
@@ -53,4 +53,5 @@ int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
 int delete_hashmap(hashmapz * t){
     hdestroy_r(&t->htab);
     free(t);
+    return 1;
 }

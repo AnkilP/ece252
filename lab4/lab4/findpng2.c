@@ -3,6 +3,8 @@
 pthread_rwlock_t rwlock;
 pthread_rwlock_t frontier_lock;
 
+int iter = 0;
+
 typedef struct html{
     int m;
     int iter;
@@ -25,17 +27,17 @@ void * retrieve_html(void * arg){
     //local buffer to hold 50 urls - this performs a dfs search
 
     // cancellation token is triggered when the frontier is empty
-    while(html_data->iter < html_data->m || html_data->iterant != NULL){
+    while(html_data->iter < html_data->m || html_data->temp_previous != NULL){
 
         // pop from frontier
-        url = pop_from_stack(html_data->temp_previous);
+        pop_from_stack(html_data->temp_previous, &frontier_lock, url);
 
         // check to see if the global hashmap (has critical sections) has the url
         if(add_to_hashmap(html_data->t, url, &rwlock, &(html_data->iter)) == 1){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-            process_data(curl, recv_buf, html_data->temp_previous); // adds to the local stack
+            process_data(curl, &recv_buf, html_data->temp_previous, &frontier_lock); // adds to the local stack
         }
     }
 
@@ -45,6 +47,7 @@ void * retrieve_html(void * arg){
 
     // it then visits that webpage and adds urls to its global url frontier
     
+    return;
 }
 
 
@@ -53,12 +56,7 @@ int main(int argc, char** argv) {
     int t = 1;
     int m = 50;
     char logFile[256];
-    char* seedurl;
-
-    CURL *curl_handle;
-    CURLcode res;
     char url[256];
-    RECV_BUF recv_buf;
 
     pthread_rwlock_init( &rwlock, NULL );
     pthread_rwlock_init( &frontier_lock, NULL );
@@ -109,13 +107,13 @@ int main(int argc, char** argv) {
     int* p_res = malloc(sizeof(int) * t);
     
     create_hash_map(tableau, m); // create global hashmap
-    add_to_hashmap(tableau, url, web_protect);
+    add_to_hashmap(tableau, url, &rwlock, &iter);
 
-    url_node * sentinel = (url_nonde * )malloc(sizeof(url_node));
-    url_node * temp_previous = add_to_stack(sentinel, html->url);
+    url_node * sentinel = (url_node * )malloc(sizeof(url_node));
+    url_node * temp_previous = add_to_stack(sentinel, url, &frontier_lock);
     //populate html_struct
     html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
-    html_args->iter = 0;
+    html_args->iter = 1;
     html_args->m = m;
     html_args->seedurl = url;
     html_args->sentinel = sentinel;
@@ -124,17 +122,17 @@ int main(int argc, char** argv) {
 
     // start threads
     for (int i = 0; i < t; i++) {
-        pthread_create(threads[i], NULL, retrieve_html, (void*) html_args);
+        pthread_create(&threads[i], NULL, retrieve_html, (void*) html_args);
     }
 
     for (int i = 0; i < t; i++) {
-        pthread_join(threads[i], (void**) &(p_res[i]);
+        pthread_join(&threads[i], (void**) &(p_res[i]));
     }
 
     //Thread cleanup
     free(threads);
     for (int i = 0; i < t; i++) {
-        free(p_res[i]);
+        free(&p_res[i]);
     }
 
     delete_hashmap(tableau); // cleanup everything for hashmap
