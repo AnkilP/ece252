@@ -22,10 +22,9 @@ void* retrieve_html(void* arg);
 //For accessing the url frontier hashmap
 pthread_rwlock_t pngStack; //For accessing the png url stack
 pthread_rwlock_t visitedStack; //For accessing the visited url stack
-pthread_rwlock_t frontier_lock;
+pthread_rwlock_t frontier_lock; // For accesssing the url frontier
 
 Hashtable* all_visited_url;
-Hashtable* png_url;
 url_node* url_frontier;
 
 int totalRetrievedPng = 0;
