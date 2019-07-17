@@ -318,7 +318,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_rwlock_t * frontier_lock)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock)
 {
     CURLcode res;
     char fname[256];
@@ -330,7 +330,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthr
 	    printf("Response code: %ld\n", response_code);
     }
 
-    if ( response_code >= 400 ) { 
+    if ( response_code >= 400 ) {
     	fprintf(stderr, "Error.\n");
         return 1;
     }
