@@ -13,3 +13,4 @@ typedef struct hashmapz{
 int create_hash_map(hashmapz * t, int size);
 int add_to_hashmap(hashmapz * t, char * url, sem_t * web_protect, int * iter);
 int delete_hashmap(hashmapz * t);
+int lookup(hashmapz * t, char * url);

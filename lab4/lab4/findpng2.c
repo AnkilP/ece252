@@ -1,6 +1,6 @@
 #include "hashmap.h"
 
-sem_t web_protect; // used to block access to the hashmap
+pthread_rwlock_t rwlock;
 
 typedef struct html{
     int m;
@@ -30,7 +30,7 @@ void * retrieve_html(void * arg){
         url = pop_from_stack(html_data->temp_previous);
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(html_data->t, url, web_protect, &(html_data->iter)) == 1){
+        if(add_to_hashmap(html_data->t, url, &rwlock, &(html_data->iter)) == 1){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
@@ -59,6 +59,8 @@ int main(int argc, char** argv) {
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
+
+    pthread_rwlock_init( &rwlock, NULL );
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
