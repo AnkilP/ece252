@@ -106,10 +106,25 @@ int main(int argc, char** argv) {
         strcpy(url, argv[optind]);
     }
 
+    pthread_t* threads = malloc(sizeof(pthread_t) * t);
+    int* p_res = malloc(sizeof(int) * t);
+    
     create_hash_map(tableau, m); // create global hashmap
     add_to_hashmap(tableau, url, web_protect);
     // start threads
+    for (int i = 0; i < t; i++) {
+        pthread_create(threads[i], NULL, retrieve_html, (void*) 0);
+    }
 
+    for (int i = 0; i < t; i++) {
+        pthread_join(threads[i], (void**) &(p_res[i]);
+    }
+
+    //Thread cleanup
+    free(threads);
+    for (int i = 0; i < t; i++) {
+        free(p_res[i]);
+    }
 
     delete_hashmap(tableau); // cleanup everything for hashmap
 

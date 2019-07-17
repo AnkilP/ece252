@@ -9,7 +9,7 @@ LD = gcc
 LDFLAGS = -std=gnu99 -g3 -fsanitize=address 
 LDLIBS_XML2 = $(shell xml2-config --libs)
 LDLIBS_CURL = $(shell curl-config --libs)
-LDLIBS = $(LDLIBS_XML2) $(LDLIBS_CURL) 
+LDLIBS = $(LDLIBS_XML2) $(LDLIBS_CURL) -pthread -lpng -lz
 
 SRCS   = findpng2.c curl_helper.c hashmap.c node.c
 OBJS   = findpng2.o curl_helper.o hashmap.o node.o
