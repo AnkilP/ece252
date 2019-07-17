@@ -1,7 +1,13 @@
 // this is a wrapper "thing" (im not sure what non-oop guys call it)
 // to help augment the glibc hashmap thing to be thread safety
 
-#include "curl_helper.h" // this has search.h in it - I dont like polluting the namespace
+#include "node.h" // this has search.h in it - I dont like polluting the namespace
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <string.h>
 
 typedef struct hashtable{
     struct hsearch_data htab;
@@ -9,7 +15,7 @@ typedef struct hashtable{
     ENTRY e, *ep;
 } Hashtable;
 
-int create_hash_map(hashmapz * t, int size);
-int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * iter);
-int delete_hashmap(hashmapz * t);
-int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock);
+int create_hash_map(Hashtable * t, int size);
+int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock);
+int delete_hashmap(Hashtable * t);
+int lookup(Hashtable * t, char * url, pthread_rwlock_t * rwlock);

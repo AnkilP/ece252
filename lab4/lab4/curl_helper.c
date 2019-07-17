@@ -298,7 +298,7 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthr
     return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
 }
 
-int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
+int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, pthread_rwlock_t * pngStack)
 {
     pid_t pid =getpid();
     char fname[256];
@@ -307,7 +307,9 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
     if ( eurl != NULL) {
         printf("The PNG url is: %s\n", eurl);
     }
-
+    if(!lookup(pngTable, eurl, pngStack)){
+        add_to_hashmap(pngTable, eurl, pngStack);
+    }
     sprintf(fname, "./output_%d_%d.png", p_recv_buf->seq, pid);
     return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
 }
@@ -318,7 +320,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack)
 {
     CURLcode res;
     char fname[256];
@@ -347,7 +349,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthre
     if ( strstr(ct, CT_HTML) ) {
         return process_html(curl_handle, p_recv_buf, htmlz, frontier_lock);
     } else if ( strstr(ct, CT_PNG) ) {
-        return process_png(curl_handle, p_recv_buf);
+        return process_png(curl_handle, p_recv_buf, pngTable, pngStack);
     } else {
         sprintf(fname, "./output_%d", pid);
     }

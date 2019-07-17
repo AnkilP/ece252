@@ -27,14 +27,12 @@
  */ 
 
 #include <string.h>
-#include <sys/types.h>
 #include <curl/curl.h>
 #include <libxml/HTMLparser.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 #include <libxml/uri.h>
 
-#include <sys/shm.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -42,7 +40,7 @@
 #include <semaphore.h>
 #include <sys/types.h>
 
-#include "node.h" // for linkedlist + other includes
+#include "hashmap.h"
 
 
 #define SEED_URL "http://ece252-1.uwaterloo.ca/lab4/"
@@ -79,4 +77,4 @@ int recv_buf_cleanup(RECV_BUF *ptr);
 void cleanup(CURL *curl, RECV_BUF *ptr);
 int write_file(const char *path, const void *in, size_t len);
 CURL *easy_handle_init(RECV_BUF *ptr, const char *url);
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_rwlock_t * frontier_lock);
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack);

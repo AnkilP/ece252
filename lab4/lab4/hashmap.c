@@ -13,25 +13,16 @@ int create_hash_map(Hashtable * t, int size){
 
 int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     t->e.key = url;
+    t->e.data = (void *) 1;
     pthread_rwlock_wrlock( rwlock );
-    hsearch_r(t->e, FIND, &t->ep, &t->htab); // populate ep with the value
-    // sem_post(web_protect);
-    if(!t->ep){
-        t->e.data = (void *) 1;
-        // sem_wait(web_protect);
-        hsearch_r(t->e, ENTER, &t->ep, &t->htab);
-        pthread_rwlock_unlock( rwlock );
-        if(t->ep == NULL){
-            fprintf(stderr, "hashmap entry failed");
-            return 0;
-        }
-        else{
-            return 1; // new url found
-        }
+    hsearch_r(t->e, ENTER, &t->ep, &t->htab);
+    pthread_rwlock_unlock( rwlock );
+    if(t->ep == NULL){
+        fprintf(stderr, "hashmap entry failed");
+        return 0;
     }
     else{
-        pthread_rwlock_unlock( rwlock );
-        return 2; // url already in hashmap
+        return 1; // new url found
     }
 }
 

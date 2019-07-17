@@ -1,4 +1,4 @@
-#include "hashmap.h"
+#include "curl_helper.h"
 
 typedef struct html{
     char * seedurl;
@@ -15,6 +15,7 @@ pthread_rwlock_t visitedStack; //For accessing the visited url stack
 pthread_rwlock_t frontier_lock; // For accesssing the url frontier
 
 Hashtable* all_visited_url;
+Hashtable* pngTable;
 url_node* url_frontier;
 
 int totalRetrievedPng = 0;
@@ -39,9 +40,7 @@ void * retrieve_html(void * arg){
 
         //We still havent reached png limit
         //Get a new url from frontier
-        pthread_mutex_lock(&frontier);
-        pop_from_stack(url_frontier, &frontier, url);
-        pthread_mutex_unlock(&frontier);
+        pop_from_stack(url_frontier, &frontier_lock, url);
 
         //Frontier is empty, we leave this thread
         if (url == NULL) {
@@ -53,7 +52,7 @@ void * retrieve_html(void * arg){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-            res_data = process_data(curl, &recv_buf, html_data->temp_previous, &frontier);
+            res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, pngTable, &pngStack);
             add_to_hashmap(all_visited_url, url, &visitedStack);
         }
     }
@@ -120,7 +119,8 @@ int main(int argc, char** argv) {
     int* p_res = malloc(sizeof(int) * t);
     
     create_hash_map(all_visited_url, m); // create global hashmap
-    add_to_hashmap(all_visited_url, url, &visitedStack, &totalRetrievedPng); // add the seed url
+    add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
+
 
     url_node * sentinel = (url_node * )malloc(sizeof(url_node));
     url_frontier = add_to_stack(sentinel, url, &frontier_lock);
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
     pthread_rwlock_destroy( &pngStack );
     pthread_rwlock_destroy( &visitedStack);
     pthread_rwlock_destroy( &frontier_lock );
-    delete_hashmap(png_url); // cleanup everything for hashmap
+    delete_hashmap(pngTable); // cleanup everything for hashmap
     delete_hashmap(all_visited_url);
     cleanup_stack(sentinel); // this takes care of temp_previous as well
     free(html_args);
