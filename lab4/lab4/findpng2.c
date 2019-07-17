@@ -16,12 +16,11 @@ typedef struct html{
 void* retrieve_html(void* arg);
 
 //For accessing the url frontier hashmap
-pthread_mutex_t frontier;
 pthread_rwlock_t pngStack; //For accessing the png url stack
 pthread_rwlock_t visitedStack; //For accessing the visited url stack
+pthread_rwlock_t frontier_lock; // For accesssing the url frontier
 
 Hashtable* all_visited_url;
-Hashtable* png_url;
 url_node* url_frontier;
 
 int totalRetrievedPng = 0;
@@ -83,7 +82,7 @@ int main(int argc, char** argv) {
 
     pthread_rwlock_init(&pngStack, NULL);
     pthread_rwlock_init(&visitedStack, NULL);
-    pthread_mutex_init(&frontier, NULL);
+    pthread_rwlock_init(&frontier_lock, NULL);
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  

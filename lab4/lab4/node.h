@@ -8,7 +8,7 @@
 typedef struct node {
     struct node * forward;
     struct node * backward;
-    char url[256];
+    char * url;
 } url_node;
 
 url_node * create_new_stack();
