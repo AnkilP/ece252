@@ -69,7 +69,7 @@ typedef struct recv_buf2 {
 
 htmlDocPtr mem_getdoc(char *buf, int size, const char *url);
 xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath);
-int find_http(char *fname, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_rwlock_t * frontier_lock);
+int find_http(char *fname, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_mutex_t * frontier_lock);
 size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata);
 size_t write_cb_curl3(char *p_recv, size_t size, size_t nmemb, void *p_userdata);
 int recv_buf_init(RECV_BUF *ptr, size_t max_size);

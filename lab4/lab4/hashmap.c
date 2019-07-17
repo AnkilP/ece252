@@ -16,11 +16,11 @@ int create_hash_map(Hashtable * t, int size){
 int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     
     ENTRY e, *ep;
-    unsigned n = 0;
     e.key = url;
     e.data = (int *) 1;
+    printf("%x\n", &(t->htab));
     pthread_rwlock_wrlock( rwlock );
-    n = hsearch_r(e, ENTER, &ep, &(t->htab));
+    hsearch_r(e, ENTER, &ep, &(t->htab));
     pthread_rwlock_unlock( rwlock );
     if(ep == NULL){
         fprintf(stderr, "hashmap entry failed");

@@ -38,7 +38,7 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_rwlock_t * frontier_lock)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_mutex_t * frontier_lock)
 {
 
     int i;
@@ -285,7 +285,7 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     return curl_handle;
 }
 
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_rwlock_t * frontier_lock)
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_mutex_t * frontier_lock)
 {
     char fname[256];
     int follow_relative_link = 1;

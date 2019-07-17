@@ -13,7 +13,7 @@ void* retrieve_html(void* arg);
 //For accessing the url frontier hashmap
 pthread_rwlock_t pngStack; //For accessing the png url stack
 pthread_rwlock_t visitedStack; //For accessing the visited url stack
-pthread_rwlock_t frontier_lock; // For accesssing the url frontier
+pthread_mutex_t frontier_lock; // For accesssing the url frontier
 
 Hashtable* all_visited_url;
 Hashtable* pngTable;
@@ -63,8 +63,6 @@ void * retrieve_html(void * arg){
     // each thread starts with a specific url in its frontier
 
     // it then visits that webpage and adds urls to its global url frontier
-
-    return;
 }
 
 int main(int argc, char** argv) {
@@ -76,7 +74,8 @@ int main(int argc, char** argv) {
 
     pthread_rwlock_init(&pngStack, NULL);
     pthread_rwlock_init(&visitedStack, NULL);
-    pthread_rwlock_init(&frontier_lock, NULL);
+    pthread_mutex_init(&frontier_lock, NULL);
+    
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
@@ -119,8 +118,7 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    int tempz = create_hash_map(all_visited_url, 2 * m); // create global hashmap
-    printf("%i\n", tempz);
+    int tempz = create_hash_map(all_visited_url, 1000); // create global hashmap
     add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
 
     create_hash_map(pngTable, m);
@@ -141,7 +139,7 @@ int main(int argc, char** argv) {
     }
 
     for (int i = 0; i < t; i++) {
-        pthread_join(&threads[i], (void**) &(p_res[i]));
+        pthread_join(threads[i], (void**) &(p_res[i]));
     }
 
     //Thread cleanup
@@ -152,7 +150,7 @@ int main(int argc, char** argv) {
 
     pthread_rwlock_destroy( &pngStack );
     pthread_rwlock_destroy( &visitedStack);
-    pthread_rwlock_destroy( &frontier_lock );
+    pthread_mutex_destroy( &frontier_lock );
     delete_hashmap(pngTable); // cleanup everything for hashmap
     delete_hashmap(all_visited_url);
     cleanup_stack(sentinel); // this takes care of temp_previous as well
