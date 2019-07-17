@@ -26,11 +26,11 @@ int add_to_hashmap(hashmapz * t, chat * url, sem_t * web_protect){
             return 0;
         }
         else{
-            return 1;
+            return 1; // new url found
         }
     }
     else{
-        return 2;
+        return 2; // url already in hashmap
     }
 }
 

@@ -11,8 +11,8 @@ LDLIBS_XML2 = $(shell xml2-config --libs)
 LDLIBS_CURL = $(shell curl-config --libs)
 LDLIBS = $(LDLIBS_XML2) $(LDLIBS_CURL) 
 
-SRCS   = findpng2.c curl_helper.c hashmap.c
-OBJS   = findpng2.o curl_helper.o hashmap.o
+SRCS   = findpng2.c curl_helper.c hashmap.c node.c
+OBJS   = findpng2.o curl_helper.o hashmap.o node.o
 TARGETS= findpng2
 
 all: ${TARGETS}
