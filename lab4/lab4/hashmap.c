@@ -7,19 +7,19 @@ int create_hash_map(hashmapz * t, int size){
     else{
         return 0;
     }
-    hcreate(size); // should use hcreate if we want to scale
+    hcreate_r(size, &(t->htab));
     return 1;
 }
 
 int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * iter){
     t->e.key = url;
     pthread_rwlock_wrlock( rwlock );
-    t->ep = hsearch(t->e, FIND);
+    hsearch_r(t->e, FIND, &t->ep, &t->htab); // populate ep with the value
     // sem_post(web_protect);
-    if(!ep){
-        this->e.data = (void *) 1;
+    if(!t->ep){
+        t->e.data = (void *) 1;
         // sem_wait(web_protect);
-        t->ep = hsearch(this->e, ENTER);
+        hsearch_r(t->e, ENTER, &t->ep, &t->htab);
         *iter++;
         pthread_rwlock_unlock( rwlock );
         if(t->ep == NULL){
@@ -39,8 +39,8 @@ int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * it
 int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
     pthread_rwlock_rdlock(rwlock);
     t->e.key = url;
-    t->ep = hsearch(t->e, FIND);
-    if(ep){
+    hsearch_r(t->e, FIND, &t->ep, &t->htab);
+    if(t->ep){
         pthread_rwlock_unlock(rwlock);
         return 1;
     }
@@ -51,6 +51,7 @@ int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
 }
 
 int delete_hashmap(hashmapz * t){
-    hdestroy();
+    hdestroy_r(&t->htab);
     free(t);
+    return 1;
 }

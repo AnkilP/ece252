@@ -1,6 +1,6 @@
 #include "node.h"
 
-static url_node * add_to_stack(url_node * previous, char * url){
+url_node * add_to_stack(url_node * previous, char * url, pthread_rwlock_t * frontier_lock){
     url_node * e;
 
     e = (url_node *) malloc(sizeof(url_node));
@@ -9,8 +9,12 @@ static url_node * add_to_stack(url_node * previous, char * url){
         exit(EXIT_FAILURE);
     }
 
+    // e->url = url;
+    
+    strcpy(e->url, url);
+    pthread_rwlock_wrlock(frontier_lock);
     insque(e, previous);
-    e->url = url;
+    pthread_rwlock_unlock(frontier_lock);
     previous = e;
     return e; // incrementing stack pointer
 }
@@ -42,12 +46,14 @@ int cleanup_stack(url_node * head){
     return 1;
 }
 
-char * pop_from_stack(url_node * htmlz){
-    char  * temp = htmlz->url;
+void pop_from_stack(url_node * htmlz, pthread_rwlock_t * frontier_lock, char * url){
+    //char  * temp = htmlz->url;
+    strcpy(url, htmlz->url);
     url_node * temperoo = htmlz;
     htmlz = htmlz->backward;
+    pthread_rwlock_wrlock(frontier_lock);
     remque(temperoo);
-    return temp;
+    pthread_rwlock_unlock(frontier_lock);
 }
 
 

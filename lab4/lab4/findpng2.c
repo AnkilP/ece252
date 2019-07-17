@@ -63,7 +63,7 @@ void * retrieve_html(void * arg){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-            process_data(curl, recv_buf, html_data->temp_previous); // adds to the local stack
+            process_data(curl, &recv_buf, html_data->temp_previous, &frontier_lock); // adds to the local stack
         }
     }
 
@@ -72,6 +72,8 @@ void * retrieve_html(void * arg){
     // each thread starts with a specific url in its frontier
 
     // it then visits that webpage and adds urls to its global url frontier
+
+    return;
 }
 
 int writeToFile() {
@@ -84,16 +86,11 @@ int main(int argc, char** argv) {
     int t = 1;
     int m = 50;
     char logFile[256];
-    char* seedurl;
-
-    CURL *curl_handle;
-    CURLcode res;
     char url[256];
-    RECV_BUF recv_buf;
 
-    pthread_rwlock_init(&frontierRW, NULL);
-    pthread_mutex_init(&pngStack, NULL);
-    pthread_mutex_init(&visitedStack, NULL);
+    pthread_rwlock_init(&pngStack, NULL);
+    pthread_rwlock_init(&visitedStack, NULL);
+    pthread_mutex_init(&frontier, NULL);
 
     char * str = "option requires an argument";  
     curl_global_init(CURL_GLOBAL_NOTHING);  
@@ -136,14 +133,14 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    create_hash_map(url_frontier, m); // create global hashtable
-    add_to_hashmap(tableau, url, web_protect); //Add the SEED URL to the frontier hashtable
+    create_hash_map(tableau, m); // create global hashmap
+    add_to_hashmap(tableau, url, &rwlock, &iter);
 
-    url_node * sentinel = (url_nonde * )malloc(sizeof(url_node));
-    url_node * temp_previous = add_to_stack(sentinel, html->url);
+    url_node * sentinel = (url_node * )malloc(sizeof(url_node));
+    url_node * temp_previous = add_to_stack(sentinel, url, &frontier_lock);
     //populate html_struct
     html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
-    html_args->iter = 0;
+    html_args->iter = 1;
     html_args->m = m;
     html_args->seedurl = url;
     html_args->sentinel = sentinel;
@@ -152,17 +149,17 @@ int main(int argc, char** argv) {
 
     // start threads
     for (int i = 0; i < t; i++) {
-        pthread_create(threads[i], NULL, retrieve_html, (void*) NULL);
+        pthread_create(&threads[i], NULL, retrieve_html, (void*) html_args);
     }
 
     for (int i = 0; i < t; i++) {
-        pthread_join(threads[i], (void**) &(p_res[i]);
+        pthread_join(&threads[i], (void**) &(p_res[i]));
     }
 
     //Thread cleanup
     free(threads);
     for (int i = 0; i < t; i++) {
-        free(p_res[i]);
+        free(&p_res[i]);
     }
 
     delete_hashmap(url_frontier); // cleanup everything for hashmap

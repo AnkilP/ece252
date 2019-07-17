@@ -38,7 +38,7 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_rwlock_t * frontier_lock)
 {
 
     int i;
@@ -65,7 +65,7 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
                 printf("href: %s\n", href);
-                add_to_stack(htmlz, href);
+                add_to_stack(htmlz, href, frontier_lock);
             }
             xmlFree(href);
         }
@@ -285,7 +285,7 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     return curl_handle;
 }
 
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz)
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_rwlock_t * frontier_lock)
 {
     char fname[256];
     int follow_relative_link = 1;
@@ -293,7 +293,7 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz)
     pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, htmlz); 
+    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, htmlz, frontier_lock); 
     sprintf(fname, "./output_%d.html", pid);
     return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
 }
@@ -318,7 +318,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthread_rwlock_t * frontier_lock)
 {
     CURLcode res;
     char fname[256];
@@ -345,7 +345,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz)
     }
 
     if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf, htmlz);
+        return process_html(curl_handle, p_recv_buf, htmlz, frontier_lock);
     } else if ( strstr(ct, CT_PNG) ) {
         return process_png(curl_handle, p_recv_buf);
     } else {
