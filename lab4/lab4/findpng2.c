@@ -44,7 +44,6 @@ void * retrieve_html(void * arg){
 
     // it then visits that webpage and adds urls to its global url frontier
     
-    
 }
 
 
