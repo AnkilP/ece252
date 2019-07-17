@@ -3,7 +3,7 @@
 
 #include "curl_helper.h" // this has search.h in it - I dont like polluting the namespace
 
-typedef struct hashmap{
+typedef struct hashtable{
     struct hsearch_data htab;
     int size;
     ENTRY e, *ep;

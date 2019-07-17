@@ -26,22 +26,22 @@ void * retrieve_html(void * arg){
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
+    html_struct* html_args = (html_struct*) arg;
+    int res_data;
 
-    html_struct * html = (html_struct * ) arg;
-
-    int required_png = html->t->size;
-    int pngnum;
     //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
     while(1) {
         //Check to see if we have reached our required png amount
         __sync_fetch_and_add(&totalRetrievedPng, 0);
-        if (totalRetrievedPng == required_png) {
+        if (totalRetrievedPng == html_args->t->size) {
             break;
         }
 
         //We still havent reached png limit
         //Get a new url from frontier
-        pop_from_stack(url_frontier, &frontier_lock, url);
+        pthread_mutex_lock(&frontier);
+        pop_from_stack(url_frontier, &frontier, url);
+        pthread_mutex_unlock(&frontier);
 
         //Frontier is empty, we leave this thread
         if (url == NULL) {
@@ -49,11 +49,12 @@ void * retrieve_html(void * arg){
         }
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(all_visited_url, url, &visitedStack, &(totalRetrievedPng)) == 1) {
+        if(lookup(all_visited_url, url, &visitedStack) == 0) {
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-            process_data(curl, &recv_buf, html_data->temp_previous, &frontier_lock); // adds to the local stack
+            res_data = process_data(curl, &recv_buf, html_data->temp_previous, &frontier);
+            add_to_hashmap(all_visited_url, url, &visitedStack);
         }
     }
 
@@ -65,11 +66,6 @@ void * retrieve_html(void * arg){
 
     return;
 }
-
-int writeToFile() {
-
-}
-
 
 int main(int argc, char** argv) {
     int c;
@@ -153,7 +149,8 @@ int main(int argc, char** argv) {
     pthread_rwlock_destroy( &pngStack );
     pthread_rwlock_destroy( &visitedStack);
     pthread_rwlock_destroy( &frontier_lock );
-    free(html_args);
-    cleanup_stack(sentinel); // this takes care of temp_previous as well
+    delete_hashmap(png_url); // cleanup everything for hashmap
     delete_hashmap(all_visited_url);
+    cleanup_stack(sentinel); // this takes care of temp_previous as well
+    free(html_args);
 }

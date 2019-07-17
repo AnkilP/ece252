@@ -1,6 +1,6 @@
 #include "hashmap.h"
 
-int create_hash_map(hashmapz * t, int size){
+int create_hash_map(Hashtable * t, int size){
     if(size > 0){
         t->size = size;
     }
@@ -11,7 +11,7 @@ int create_hash_map(hashmapz * t, int size){
     return 1;
 }
 
-int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * iter){
+int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     t->e.key = url;
     pthread_rwlock_wrlock( rwlock );
     hsearch_r(t->e, FIND, &t->ep, &t->htab); // populate ep with the value
@@ -20,7 +20,6 @@ int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * it
         t->e.data = (void *) 1;
         // sem_wait(web_protect);
         hsearch_r(t->e, ENTER, &t->ep, &t->htab);
-        *iter++;
         pthread_rwlock_unlock( rwlock );
         if(t->ep == NULL){
             fprintf(stderr, "hashmap entry failed");
@@ -36,7 +35,7 @@ int add_to_hashmap(hashmapz * t, char * url, pthread_rwlock_t * rwlock, int * it
     }
 }
 
-int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
+int lookup(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     pthread_rwlock_rdlock(rwlock);
     t->e.key = url;
     hsearch_r(t->e, FIND, &t->ep, &t->htab);
@@ -50,7 +49,7 @@ int lookup(hashmapz * t, char * url, pthread_rwlock_t * rwlock){
     }
 }
 
-int delete_hashmap(hashmapz * t){
+int delete_hashmap(Hashtable * t){
     hdestroy_r(&t->htab);
     free(t);
     return 1;
