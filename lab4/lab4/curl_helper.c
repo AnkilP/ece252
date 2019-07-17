@@ -312,7 +312,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf)
     return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
 }
 /**
- * @brief process teh download data by curl
+ * @brief process the download data by curl
  * @param CURL *curl_handle is the curl handler
  * @param RECV_BUF p_recv_buf contains the received data. 
  * @return 0 on success; non-zero otherwise

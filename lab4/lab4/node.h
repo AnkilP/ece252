@@ -11,5 +11,6 @@ typedef struct node{
 
 url_node * create_new_stack();
 static url_node * add_to_stack(url_node * previous, char * url);
-char * pop_from_stack(url_node * htmlz, url_node * previous);
+char * pop_from_stack(url_node * htmlz);
 int cleanup_stack(url_node * head);
+int num_of_elements();
