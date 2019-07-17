@@ -5,6 +5,7 @@ typedef struct html{
     Hashtable * t;
     url_node * sentinel;
     url_node * temp_previous;
+    Hashtable * pngTable;
 } html_struct;
 
 void* retrieve_html(void* arg);
@@ -52,7 +53,7 @@ void * retrieve_html(void * arg){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-            res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, pngTable, &pngStack);
+            res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, html_args->pngTable, &pngStack);
             add_to_hashmap(all_visited_url, url, &visitedStack);
         }
     }
@@ -118,9 +119,10 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    create_hash_map(all_visited_url, m); // create global hashmap
+    create_hash_map(all_visited_url, 2 * m); // create global hashmap
     add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
 
+    create_hash_map(pngTable, m);
 
     url_node * sentinel = (url_node * )malloc(sizeof(url_node));
     url_frontier = add_to_stack(sentinel, url, &frontier_lock);
@@ -130,6 +132,7 @@ int main(int argc, char** argv) {
     html_args->sentinel = sentinel;
     html_args->t = all_visited_url;
     html_args->temp_previous = url_frontier;
+    html_args->pngTable = pngTable;
 
     // start threads
     for (int i = 0; i < t; i++) {
