@@ -42,10 +42,11 @@ int cleanup_stack(url_node * head){
     return 1;
 }
 
-char * pop_from_stack(url_node * htmlz, url_node * previous){
+char * pop_from_stack(url_node * htmlz){
     char  * temp = htmlz->url;
-    previous = htmlz->backward;
-    remque(htmlz);
+    url_node * temperoo = htmlz;
+    htmlz = htmlz->backward;
+    remque(temperoo);
     return temp;
 }
 

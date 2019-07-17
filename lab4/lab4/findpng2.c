@@ -9,7 +9,6 @@ typedef struct html{
     hashmapz * t;
     url_node * sentinel;
     url_node * temp_previous;
-    url_node * iterant;
 } html_struct;
 
 void * retrieve_html(void * arg){
@@ -25,34 +24,25 @@ void * retrieve_html(void * arg){
     //local buffer to hold 50 urls - this performs a dfs search
 
     // cancellation token is triggered when the frontier is empty
-    while(html_data->iter < html_data->m || iterant != NULL){
+    while(html_data->iter < html_data->m || html_data->iterant != NULL){
 
         // pop from frontier
-        url = pop_from_stack(temp_previous, iterant);
+        url = pop_from_stack(html_data->temp_previous);
 
         // check to see if the global hashmap (has critical sections) has the url
-        if(add_to_hashmap(html_data->t, url, web_protect, &html_data->iter) == 1){
+        if(add_to_hashmap(html_data->t, url, web_protect, &(html_data->iter)) == 1){
             curl = easy_handle_init(&recv_buf, url);
             res = curl_easy_perform(curl);
 
-
-
-            process_data(curl, recv_buf, iterant); // adds to the local stack
+            process_data(curl, recv_buf, html_data->temp_previous); // adds to the local stack
         }
-
-        if(iterant == NULL){
-            pthread_cond
-        }
-        temp_previous = iterant; // resetting the pointer
-
     }
 
-    cleanup_stack(sentinel);
     cleanup(curl, &recv_buf);
 
     // each thread starts with a specific url in its frontier
 
-    // it then visits that webpage and adds urls to its own thread-frontier
+    // it then visits that webpage and adds urls to its global url frontier
     
     
 }
@@ -120,12 +110,18 @@ int main(int argc, char** argv) {
 
     url_node * sentinel = (url_nonde * )malloc(sizeof(url_node));
     url_node * temp_previous = add_to_stack(sentinel, html->url);
-    url_node * iterant;
     //populate html_struct
+    html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
+    html_args->iter = 0;
+    html_args->m = m;
+    html_args->seedurl = url;
+    html_args->sentinel = sentinel;
+    html_args->t = tableau;
+    html_args->temp_previous = temp_previous;
 
     // start threads
     for (int i = 0; i < t; i++) {
-        pthread_create(threads[i], NULL, retrieve_html, (void*) 0);
+        pthread_create(threads[i], NULL, retrieve_html, (void*) html_args);
     }
 
     for (int i = 0; i < t; i++) {
@@ -139,5 +135,6 @@ int main(int argc, char** argv) {
     }
 
     delete_hashmap(tableau); // cleanup everything for hashmap
-
+    free(html_args);
+    cleanup_stack(sentinel);
 }
