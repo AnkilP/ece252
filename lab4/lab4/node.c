@@ -48,9 +48,13 @@ int cleanup_stack(url_node * head){
 
 void pop_from_stack(url_node * htmlz, pthread_mutex_t * frontier_lock, char * url){
     //char  * temp = htmlz->url;
+    pthread_mutex_lock(frontier_lock);
+    if(htmlz == NULL){
+        return;
+    }
     strcpy(url, htmlz->url);
     url_node * temperoo = htmlz->backward;
-    pthread_mutex_lock(frontier_lock);
+    
     remque(htmlz);
     pthread_mutex_unlock(frontier_lock);
     htmlz = temperoo;
