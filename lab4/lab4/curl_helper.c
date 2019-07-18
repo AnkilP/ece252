@@ -292,7 +292,6 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
 
 int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node ** stack, pthread_mutex_t * frontier_lock)
 {
-    char fname[256];
     int follow_relative_link = 1;
     char *url = NULL; 
 
@@ -305,14 +304,13 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node ** stack, pth
 
 int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, pthread_rwlock_t * pngStack)
 {
-    pid_t pid =getpid();
     char fname[256];
     char *eurl = NULL;          /* effective URL */
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
         //printf("The PNG url is: %s\n", eurl);
     }
-    if(!lookup(pngTable, eurl, pngStack)){
+    if(!lookup(pngTable, eurl, pngStack)) {
         add_to_hashmap(pngTable, eurl, pngStack);
     }
     sprintf(fname, "png_urls.txt");
@@ -328,7 +326,6 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
 int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct ** html_args, char* url)
 {
     CURLcode res;
-    char fname[256];
     long response_code;
 
     res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
@@ -353,7 +350,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct ** html_ar
     if ( strstr(ct, CT_HTML) ) {
         return process_html(curl_handle, p_recv_buf, &((*html_args)->url_frontier), &((*html_args)->frontier_lock));
     } else if ( strstr(ct, CT_PNG) ) {
-        return process_png(curl_handle, p_recv_buf, &((*html_args)->png_urls), &((*html_args)->pngStack));
+        return process_png(curl_handle, p_recv_buf, (*html_args)->png_urls, &((*html_args)->pngStack));
     } else {}
 
     if ((*html_args)->logUrls == 1) {

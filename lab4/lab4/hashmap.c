@@ -11,11 +11,11 @@ int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     pthread_rwlock_wrlock( rwlock );
     hsearch_r(e, ENTER, &ep, t->htab);
     pthread_rwlock_unlock( rwlock );
-    if(ep == NULL){
+    if(ep == NULL) {
         fprintf(stderr, "hashmap entry failed");
         return 0;
     }
-    else{
+    else {
         return 1; // new url found
     }
 }

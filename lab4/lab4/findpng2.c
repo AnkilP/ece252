@@ -1,11 +1,11 @@
 #include "curl_helper.h"
 
-int retrieve_html(void* arg);
+void* retrieve_html(void* arg);
 
 int totalRetrievedPng = 0;
 int threadsFetching = 0;
 
-int retrieve_html(void * arg){
+void* retrieve_html(void * arg){
     // arg should have url, condition var, pointer to hashmap
 
     CURL *curl;
