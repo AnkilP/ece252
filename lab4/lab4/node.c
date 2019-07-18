@@ -14,7 +14,7 @@ url_node * add_to_stack(url_node * previous, char * url, pthread_mutex_t * front
     strcpy(e->url, url);
     pthread_mutex_lock(frontier_lock);
     insque(e, previous);
-    pthread_mutex_lock(frontier_lock);
+    pthread_mutex_unlock(frontier_lock);
     previous = e;
     return e; // incrementing stack pointer
 }
