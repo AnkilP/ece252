@@ -36,7 +36,7 @@ int cleanup_stack(url_node * head) {
         return 0;
     }
     url_node *elem = head;
-    while(elem != NULL) {
+    while(elem->next != NULL) {
         head = head->next;
         free(elem->url);
         free(elem);

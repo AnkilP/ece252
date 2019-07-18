@@ -1,18 +1,5 @@
 #include "curl_helper.h"
 
-typedef struct html{
-    char * seedurl;
-    int logUrls;
-    char* logFile;
-    int requiredPngs;
-    Hashtable* all_visited_urls;
-    Hashtable* png_urls;
-    url_node* url_frontier;
-    pthread_rwlock_t pngStack;
-    pthread_rwlock_t visitedStack;
-    pthread_mutex_t frontier_lock;
-} html_struct;
-
 int retrieve_html(void* arg);
 
 int totalRetrievedPng = 0;
@@ -22,12 +9,6 @@ int retrieve_html(void * arg){
     // arg should have url, condition var, pointer to hashmap
 
     CURL *curl;
-    if (curl == NULL) {
-        fprintf(stderr, "Curl initialization failed. Exiting...\n");
-        curl_global_cleanup();
-        abort();
-    }
-
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
@@ -64,12 +45,12 @@ int retrieve_html(void * arg){
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
                 pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url);
-                res_data = process_data(curl, &recv_buf, html_args->url_frontier, &html_args->frontier_lock, html_args->png_urls, &html_args->pngStack, html_args->logUrls, html_args->logFile);
+                res_data = process_data(curl, &recv_buf, &html_args, url);
                 if (res_data != 0) {
                     printf("process data failed\n");
                 }
-                add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack);
                 print_stack(html_args->url_frontier, &html_args->frontier_lock);
+                add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack);
                 __sync_fetch_and_sub(&threadsFetching, 1);
             }
         }
