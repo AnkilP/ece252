@@ -54,7 +54,7 @@ int retrieve_html(void * arg){
             // check to see if the global hashmap (has critical sections) has the url
             int n = lookup(all_visited_url, url, &visitedStack);
             if(n == 0) {
-                printf("fetching from %s\n", url);
+                
                 __sync_fetch_and_add(&threadsFetching, 1);
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
