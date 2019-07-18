@@ -2,24 +2,10 @@
 
 #define _GNU_SOURCE
 
-int create_hash_map(Hashtable * t, int size){
-    t = (Hashtable * )malloc(sizeof(*t));
-    if(size > 0){
-        t->size = size;
-    }
-    else{
-        return 0;
-    }
-    memset((void *)&t->htab, 0, sizeof(t->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
-    return hcreate_r(size, &(t->htab));
-}
-
 int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
-    
     ENTRY e, *ep;
     e.key = url;
     e.data = (int *) 1;
-    printf("adding to hashmap %x\n", &(t->htab));
     pthread_rwlock_wrlock( rwlock );
     hsearch_r(e, ENTER, &ep, &(t->htab));
     pthread_rwlock_unlock( rwlock );

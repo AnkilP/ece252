@@ -14,7 +14,6 @@ typedef struct hashtable{
     int size;
 } Hashtable;
 
-int create_hash_map(Hashtable * t, int size);
 int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock);
 int delete_hashmap(Hashtable * t);
 int lookup(Hashtable * t, char * url, pthread_rwlock_t * rwlock);

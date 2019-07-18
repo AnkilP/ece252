@@ -118,11 +118,19 @@ int main(int argc, char** argv) {
     pthread_t* threads = malloc(sizeof(pthread_t) * t);
     int* p_res = malloc(sizeof(int) * t);
     
-    int tempz = create_hash_map(all_visited_url, 1000); // create global hashmap
+    all_visited_url = (Hashtable * )malloc(sizeof(*all_visited_url));
+    all_visited_url->htab = *(struct hsearch_data *) calloc(1, sizeof(all_visited_url->htab));
+    all_visited_url->size = m;
+    memset((void *)&all_visited_url->htab, 0, sizeof(all_visited_url->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
+    hcreate_r(m, &(all_visited_url->htab));
     add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
-
-    create_hash_map(pngTable, m);
-
+    
+    pngTable = (Hashtable * )malloc(sizeof(*pngTable));
+    pngTable->htab = *(struct hsearch_data *) calloc(1, sizeof(pngTable->htab));
+    pngTable->size = m;
+    memset((void *)&pngTable->htab, 0, sizeof(pngTable->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
+    hcreate_r(m, &(pngTable->htab));
+    
     url_node * sentinel = (url_node * )malloc(sizeof(url_node));
     url_frontier = add_to_stack(sentinel, url, &frontier_lock);
     //populate html_struct
