@@ -10,7 +10,7 @@ url_node * add_to_stack(url_node * previous, char * url, pthread_mutex_t * front
     }
 
     // e->url = url;
-    e->url = (char * ) malloc(strlen(url)); // mem leak?
+    e->url = (char * ) malloc(strlen(url) + 1); // mem leak?
     strcpy(e->url, url);
     pthread_mutex_lock(frontier_lock);
     insque(e, previous);

@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     memset((void *)&pngTable->htab, 0, sizeof(pngTable->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
     hcreate_r(m, &(pngTable->htab));
     
-    url_node * sentinel = (url_node * )malloc(sizeof(url_node));
+    url_node * sentinel = create_new_stack();
     url_frontier = add_to_stack(sentinel, url, &frontier_lock);
     //populate html_struct
     html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
