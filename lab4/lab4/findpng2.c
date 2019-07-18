@@ -8,7 +8,7 @@ typedef struct html{
     Hashtable * pngTable;
 } html_struct;
 
-void* retrieve_html(void* arg);
+int retrieve_html(void* arg);
 
 //For accessing the url frontier hashmap
 pthread_rwlock_t pngStack; //For accessing the png url stack
@@ -20,8 +20,9 @@ Hashtable* pngTable;
 url_node* url_frontier;
 
 int totalRetrievedPng = 0;
+int threadsFetching = 0;
 
-void * retrieve_html(void * arg){
+int retrieve_html(void * arg){
     // arg should have url, condition var, pointer to hashmap
 
     CURL *curl;
@@ -42,19 +43,26 @@ void * retrieve_html(void * arg){
         //We still havent reached png limit
         //Get a new url from frontier
         pop_from_stack(url_frontier, &frontier_lock, url);
-
-        //Frontier is empty, we leave this thread
+        //Frontier is empty and there's nothing being fetched, we leave this thread
         if (url == NULL) {
-            break;
+            __sync_fetch_and_add(&threadsFetching, 0);
+            if (threadsFetching == 0) {
+                break;
+            }
         }
+        else {
+            // check to see if the global hashmap (has critical sections) has the url
+            int n = lookup(all_visited_url, url, &visitedStack);
+            if(n == 0) {
+                printf("fetching from %s\n", url);
+                __sync_fetch_and_add(&threadsFetching, 1);
+                curl = easy_handle_init(&recv_buf, url);
+                res = curl_easy_perform(curl);
 
-        // check to see if the global hashmap (has critical sections) has the url
-        if(lookup(all_visited_url, url, &visitedStack) == 0) {
-            curl = easy_handle_init(&recv_buf, url);
-            res = curl_easy_perform(curl);
-
-            res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, html_args->pngTable, &pngStack);
-            add_to_hashmap(all_visited_url, url, &visitedStack);
+                res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, html_args->pngTable, &pngStack);
+                add_to_hashmap(all_visited_url, url, &visitedStack);
+                __sync_fetch_and_sub(&threadsFetching, 1);
+            }
         }
     }
 
@@ -63,6 +71,8 @@ void * retrieve_html(void * arg){
     // each thread starts with a specific url in its frontier
 
     // it then visits that webpage and adds urls to its global url frontier
+
+    pthread_exit(NULL);
 }
 
 int main(int argc, char** argv) {
@@ -89,12 +99,18 @@ int main(int argc, char** argv) {
                     fprintf(stderr, "%s: %s > 0 -- 't'\n", argv[0], str);
                     return -1;
                 }
+                else {
+                    printf("%s: %d\n", "t", t);
+                }
                 break;
             case 'm':
                 m = strtoul(optarg, NULL, 10);
                 if (m <= 0) {
                     fprintf(stderr, "%s: %s 1, 2, or 3 -- 'm'\n", argv[0], str);
                     return -1;
+                }
+                else {
+                    printf("%s: %d\n", "m", m);
                 }
                 break;
             case 'v':
@@ -103,6 +119,9 @@ int main(int argc, char** argv) {
                     fprintf(stderr, "%s: Please supply log file name -- 'v'\n", argv[0]);
                     return -1;
                 }
+                else {
+                    printf("%s: %s\n", "v", logFile);
+                }
                 break;
             case 1:
                 strcpy(url, optarg);
@@ -110,12 +129,15 @@ int main(int argc, char** argv) {
                     fprintf(stderr, "%s: Please supply a SEED URL as argument\n", argv[0]);
                     return -1;
                 }
+                else {
+                    printf("%s: %s\n", "seed", url);
+                }
             default:
                 break;
         }
     }
 
-    pthread_t* threads = malloc(sizeof(pthread_t) * t);
+    pthread_t threads[t];
     int* p_res = malloc(sizeof(int) * t);
     
     all_visited_url = (Hashtable * )malloc(sizeof(*all_visited_url));
@@ -123,7 +145,7 @@ int main(int argc, char** argv) {
     all_visited_url->size = m;
     memset((void *)&all_visited_url->htab, 0, sizeof(all_visited_url->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
     hcreate_r(m, &(all_visited_url->htab));
-    add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
+    //add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
     
     pngTable = (Hashtable * )malloc(sizeof(*pngTable));
     pngTable->htab = *(struct hsearch_data *) calloc(1, sizeof(pngTable->htab));
@@ -163,4 +185,6 @@ int main(int argc, char** argv) {
     delete_hashmap(all_visited_url);
     cleanup_stack(sentinel); // this takes care of temp_previous as well
     free(html_args);
+
+    return 0;
 }
