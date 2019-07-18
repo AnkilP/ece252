@@ -42,7 +42,7 @@ void * retrieve_html(void * arg){
         //We still havent reached png limit
         //Get a new url from frontier
         pop_from_stack(url_frontier, &frontier_lock, url);
-
+        printf("URL: %s\n", url);
         //Frontier is empty, we leave this thread
         if (url == NULL) {
             break;
