@@ -171,6 +171,9 @@ int main(int argc, char** argv) {
     html_args->logUrls = logUrls;
     html_args->logFile = logFile;
 
+    pop_from_stack(url_frontier, &frontier_lock, url);
+    printf("%s\n", url_frontier->url);
+
     // start threads
     for (int i = 0; i < t; i++) {
         pthread_create(&threads[i], NULL, retrieve_html, (void*) html_args);
