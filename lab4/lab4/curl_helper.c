@@ -38,7 +38,7 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * htmlz, pthread_mutex_t * frontier_lock)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node * frontier_stack, pthread_mutex_t * frontier_lock)
 {
 
     int i;
@@ -64,9 +64,8 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
                 xmlFree(old);
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
-                printf("href: %s\n", href);
-                char* url = (char*) href;
-                add_to_stack(htmlz, url, frontier_lock);
+                printf("url: %s\n", (char*) href);
+                add_to_stack(&frontier_stack, (char*) href, frontier_lock);
             }
             xmlFree(href);
         }
@@ -203,7 +202,7 @@ int write_file(const char *path, const void *in, size_t len)
         return -1;
     }
 
-    fp = fopen(path, "wb");
+    fp = fopen(path, "ab");
     if (fp == NULL) {
         perror("fopen");
         return -2;
@@ -321,7 +320,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack, int logUrls, char* logFile)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * frontier_stack, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack, int logUrls, char* logFile)
 {
     CURLcode res;
     char fname[256];
@@ -347,13 +346,13 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthre
     }
 
     if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf, html, frontier_lock);
+        return process_html(curl_handle, p_recv_buf, frontier_stack, frontier_lock);
     } else if ( strstr(ct, CT_PNG) ) {
         return process_png(curl_handle, p_recv_buf, pngTable, pngStack);
     } else {}
 
     if (logUrls == 1) {
-        return write_file(logFile, html->url, strlen(html->url));
+        return write_file(logFile, frontier_stack->url, strlen(frontier_stack->url));
     }
 
     return 0;

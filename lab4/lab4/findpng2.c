@@ -5,18 +5,15 @@ typedef struct html{
     int logUrls;
     char* logFile;
     int requiredPngs;
+    Hashtable* all_visited_urls;
+    Hashtable* png_urls;
+    url_node* url_frontier;
+    pthread_rwlock_t pngStack;
+    pthread_rwlock_t visitedStack;
+    pthread_mutex_t frontier_lock;
 } html_struct;
 
 int retrieve_html(void* arg);
-
-//For accessing the url frontier hashmap
-pthread_rwlock_t pngStack; //For accessing the png url stack
-pthread_rwlock_t visitedStack; //For accessing the visited url stack
-pthread_mutex_t frontier_lock; // For accesssing the url frontier
-
-Hashtable* all_visited_url;
-Hashtable* pngTable;
-url_node* url_frontier;
 
 int totalRetrievedPng = 0;
 int threadsFetching = 0;
@@ -47,31 +44,38 @@ int retrieve_html(void * arg){
 
         //We still havent reached png limit
         //Get a new url from frontier
-        pop_from_stack(url_frontier, &frontier_lock, url);
-
+        memset(url, 0, strlen(url));
+        url[0] = '\0'; //Zero length string
+        fetch_from_stack(html_args->url_frontier, url);
         //Frontier is empty and there's nothing being fetched, we leave this thread
         if (strlen(url) <= 0) {
             __sync_fetch_and_add(&threadsFetching, 0);
             if (threadsFetching == 0) {
+                printf("no more threads fetching and null url\n");
                 break;
             }
         }
         else {
             // check to see if the global hashmap (has critical sections) has the url
-            int n = lookup(all_visited_url, url, &visitedStack);
+            int n = lookup(html_args->all_visited_urls, url, &html_args->visitedStack);
             if(n == 0) {
                 printf("fetching from %s\n", url);
                 __sync_fetch_and_add(&threadsFetching, 1);
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
-
-                res_data = process_data(curl, &recv_buf, url_frontier, &frontier_lock, pngTable, &pngStack, html_args->logUrls, html_args->logFile);
-                add_to_hashmap(all_visited_url, url, &visitedStack);
+                pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url);
+                res_data = process_data(curl, &recv_buf, html_args->url_frontier, &html_args->frontier_lock, html_args->png_urls, &html_args->pngStack, html_args->logUrls, html_args->logFile);
+                if (res_data != 0) {
+                    printf("process data failed\n");
+                }
+                add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack);
+                print_stack(html_args->url_frontier, &html_args->frontier_lock);
                 __sync_fetch_and_sub(&threadsFetching, 1);
             }
         }
     }
 
+    curl_easy_cleanup(curl);
     recv_buf_cleanup(&recv_buf);
     pthread_exit(NULL);
 }
@@ -83,6 +87,15 @@ int main(int argc, char** argv) {
     char logFile[256];
     char url[256];
     int logUrls = 0;
+
+    //For accessing the url frontier hashmap
+    pthread_rwlock_t pngStack; //For accessing the png url stack
+    pthread_rwlock_t visitedStack; //For accessing the visited url stack
+    pthread_mutex_t frontier_lock; // For accesssing the url frontier
+
+    Hashtable* all_visited_url;
+    Hashtable* pngTable;
+    url_node* url_frontier;
 
     pthread_rwlock_init(&pngStack, NULL);
     pthread_rwlock_init(&visitedStack, NULL);
@@ -163,6 +176,12 @@ int main(int argc, char** argv) {
     html_args->logUrls = logUrls;
     html_args->logFile = logFile;
     html_args->requiredPngs = m;
+    html_args->all_visited_urls = all_visited_url;
+    html_args->png_urls = pngTable;
+    html_args->url_frontier = url_frontier;
+    html_args->frontier_lock = frontier_lock;
+    html_args->pngStack = pngStack;
+    html_args->visitedStack = visitedStack;
 
     // start threads
     for (int i = 0; i < t; i++) {
