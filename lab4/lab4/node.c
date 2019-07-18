@@ -36,20 +36,20 @@ int cleanup_stack(url_node * head) {
         return 0;
     }
     url_node *elem = head;
-    while(elem->next != NULL) {
+    while(head->next != NULL) {
         head = head->next;
         free(elem->url);
         free(elem);
         elem = head;
     }
-    free(elem->url);
-    free(elem);
+    free(head->url);
+    free(head);
     return 1;
 }
 
 int pop_from_stack(url_node ** stack, pthread_mutex_t * frontier_lock, char * url){
     //char  * temp = htmlz->url;
-    if (stack == NULL) {
+    if (*stack == NULL) {
         return 0;
     }
     strcpy(url, (*stack)->url);

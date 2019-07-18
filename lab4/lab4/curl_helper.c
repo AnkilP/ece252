@@ -64,7 +64,7 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
                 xmlFree(old);
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
-                printf("url: %s\n", (char*) href);
+                //printf("url: %s\n", (char*) href);
                 add_to_stack(frontier_stack, (char*) href, frontier_lock);
             }
             xmlFree(href);
@@ -95,7 +95,7 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     RECV_BUF *p = userdata;
 
 #ifdef DEBUG1_
-    printf("%s", p_recv);
+    //printf("%s", p_recv);
 #endif /* DEBUG1_ */
     if (realsize > strlen(ECE252_HEADER) &&
 	strncmp(p_recv, ECE252_HEADER, strlen(ECE252_HEADER)) == 0) {
@@ -209,7 +209,12 @@ int write_file(const char *path, const void *in, size_t len)
     }
 
     if (fwrite(in, 1, len, fp) != len) {
-        fprintf(stderr, "write_file: imcomplete write!\n");
+        fprintf(stderr, "write_file: incomplete write!\n");
+        return -3; 
+    }
+
+    if (fwrite("\n", sizeof(char), 1, fp)) {
+        fprintf(stderr, "write_file: incomplete write!\n");
         return -3; 
     }
     return fclose(fp);
@@ -305,7 +310,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
     char *eurl = NULL;          /* effective URL */
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
-        printf("The PNG url is: %s\n", eurl);
+        //printf("The PNG url is: %s\n", eurl);
     }
     if(!lookup(pngTable, eurl, pngStack)){
         add_to_hashmap(pngTable, eurl, pngStack);
@@ -339,7 +344,7 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct ** html_ar
     char *ct = NULL;
     res = curl_easy_getinfo(curl_handle, CURLINFO_CONTENT_TYPE, &ct);
     if ( res == CURLE_OK && ct != NULL ) {
-    	printf("Content-Type: %s, len=%ld\n", ct, strlen(ct));
+    	//printf("Content-Type: %s, len=%ld\n", ct, strlen(ct));
     } else {
         fprintf(stderr, "Failed obtain Content-Type\n");
         return 2;

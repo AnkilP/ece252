@@ -27,7 +27,7 @@ int retrieve_html(void * arg){
         //Get a new url from frontier
         memset(url, 0, strlen(url));
         url[0] = '\0'; //Zero length string
-        fetch_from_stack(html_args->url_frontier, url);
+        pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url);
         //Frontier is empty and there's nothing being fetched, we leave this thread
         if (strlen(url) <= 0) {
             __sync_fetch_and_add(&threadsFetching, 0);
@@ -39,18 +39,18 @@ int retrieve_html(void * arg){
         else {
             // check to see if the global hashmap (has critical sections) has the url
             int n = lookup(html_args->all_visited_urls, url, &html_args->visitedStack);
+            //printf("%d\n", n);
             if(n == 0) {
-                printf("fetching from %s\n", url);
+                //printf("fetching from %s\n", url);
                 __sync_fetch_and_add(&threadsFetching, 1);
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
-                pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url);
                 res_data = process_data(curl, &recv_buf, &html_args, url);
                 if (res_data != 0) {
                     printf("process data failed\n");
                 }
-                print_stack(html_args->url_frontier, &html_args->frontier_lock);
-                add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack);
+                add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack); 
+                //print_stack(html_args->url_frontier, &html_args->frontier_lock);
                 __sync_fetch_and_sub(&threadsFetching, 1);
             }
         }
@@ -138,17 +138,17 @@ int main(int argc, char** argv) {
     int* p_res = malloc(sizeof(int) * t);
     
     all_visited_url = (Hashtable * )malloc(sizeof(*all_visited_url));
-    all_visited_url->htab = (struct hsearch_data) {0};
+    all_visited_url->htab = (struct hsearch_data * ) calloc(1000, sizeof(struct hsearch_data) );
+    hcreate_r(1000, all_visited_url->htab);
     all_visited_url->size = 1000;
-    memset((void *)&all_visited_url->htab, 0, sizeof(all_visited_url->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
-    hcreate_r(m, &(all_visited_url->htab));
+    //memset((void *)&all_visited_url->htab, 0, sizeof(all_visited_url->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
     //add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
     
     pngTable = (Hashtable * )malloc(sizeof(*pngTable));
-    pngTable->htab = (struct hsearch_data) {0};
+    pngTable->htab = (struct hsearch_data * ) calloc(1000, sizeof(struct hsearch_data) );
+    hcreate_r(m, pngTable->htab);
     pngTable->size = m;
-    memset((void *)&pngTable->htab, 0, sizeof(pngTable->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
-    hcreate_r(m, &(pngTable->htab));
+    //memset((void *)&pngTable->htab, 0, sizeof(pngTable->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
     
     url_frontier = create_new_stack(url);
     //populate html_struct

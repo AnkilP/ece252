@@ -10,7 +10,7 @@
 #include <string.h>
 
 typedef struct hashtable{
-    struct hsearch_data htab;
+    struct hsearch_data * htab;
     int size;
 } Hashtable;
 
