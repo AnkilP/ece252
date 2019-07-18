@@ -18,12 +18,13 @@ int add_to_hashmap(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
     }
 }
 
-int lookup(Hashtable * t, char * url, pthread_rwlock_t * rwlock){
+int lookup(Hashtable * t, xmlChar * url, pthread_rwlock_t * rwlock){
     
     ENTRY e, *ep;
 
     pthread_rwlock_rdlock(rwlock);
     e.key = url;
+    printf("KEY: %s", e.key);
     hsearch_r(e, FIND, &ep, &t->htab);
     if(ep == NULL){
         pthread_rwlock_unlock(rwlock);
