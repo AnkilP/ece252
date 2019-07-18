@@ -6,12 +6,11 @@
 #include <string.h>
 
 typedef struct node {
-    struct node * forward;
-    struct node * backward;
+    struct node * next;
     char * url;
 } url_node;
 
 url_node * create_new_stack();
-url_node * add_to_stack(url_node * previous, char * url, pthread_mutex_t * frontier_lock);
-void pop_from_stack(url_node * htmlz, pthread_mutex_t * frontier_lock, char * url);
+void add_to_stack(url_node * previous, char * url, pthread_mutex_t * frontier_lock);
+int pop_from_stack(url_node * htmlz, pthread_mutex_t * frontier_lock, char * url);
 int cleanup_stack(url_node * head);
