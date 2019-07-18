@@ -65,7 +65,8 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
                 printf("href: %s\n", href);
-                add_to_stack(htmlz, href, frontier_lock);
+                char* url = (char*) href;
+                add_to_stack(htmlz, url, frontier_lock);
             }
             xmlFree(href);
         }
@@ -290,12 +291,12 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * htmlz, pthr
     char fname[256];
     int follow_relative_link = 1;
     char *url = NULL; 
-    pid_t pid =getpid();
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
     find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, htmlz, frontier_lock); 
-    sprintf(fname, "./output_%d.html", pid);
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    //sprintf(fname, "./output_%d.html", pid);
+    //return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    return 0;
 }
 
 int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, pthread_rwlock_t * pngStack)
@@ -310,8 +311,8 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
     if(!lookup(pngTable, eurl, pngStack)){
         add_to_hashmap(pngTable, eurl, pngStack);
     }
-    sprintf(fname, "./output_%d_%d.png", p_recv_buf->seq, pid);
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    sprintf(fname, "png_urls.txt");
+    return write_file(fname, eurl, strlen(eurl));
 }
 /**
  * @brief process the download data by curl
@@ -320,11 +321,10 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthread_mutex_t * frontier_lock, Hashtable * pngTable, pthread_rwlock_t * pngStack, int logUrls, char* logFile)
 {
     CURLcode res;
     char fname[256];
-    pid_t pid =getpid();
     long response_code;
 
     res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
@@ -350,9 +350,11 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node * html, pthre
         return process_html(curl_handle, p_recv_buf, html, frontier_lock);
     } else if ( strstr(ct, CT_PNG) ) {
         return process_png(curl_handle, p_recv_buf, pngTable, pngStack);
-    } else {
-        sprintf(fname, "./output_%d", pid);
+    } else {}
+
+    if (logUrls == 1) {
+        return write_file(logFile, html->url, strlen(html->url));
     }
 
-    return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
+    return 0;
 }

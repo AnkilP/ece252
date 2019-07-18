@@ -6,6 +6,8 @@ typedef struct html{
     url_node * sentinel;
     url_node * temp_previous;
     Hashtable * pngTable;
+    int logUrls;
+    char* logFile;
 } html_struct;
 
 int retrieve_html(void* arg);
@@ -42,9 +44,11 @@ int retrieve_html(void * arg){
 
         //We still havent reached png limit
         //Get a new url from frontier
+        memset(url, 0, 256);
+        url[0] = '\0';
         pop_from_stack(url_frontier, &frontier_lock, url);
         //Frontier is empty and there's nothing being fetched, we leave this thread
-        if (url == NULL) {
+        if (strlen(url) <= 0) {
             __sync_fetch_and_add(&threadsFetching, 0);
             if (threadsFetching == 0) {
                 break;
@@ -59,7 +63,7 @@ int retrieve_html(void * arg){
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
 
-                res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, html_args->pngTable, &pngStack);
+                res_data = process_data(curl, &recv_buf, html_args->temp_previous, &frontier_lock, html_args->pngTable, &pngStack, html_args->logUrls, html_args->logFile);
                 add_to_hashmap(all_visited_url, url, &visitedStack);
                 __sync_fetch_and_sub(&threadsFetching, 1);
             }
@@ -81,6 +85,7 @@ int main(int argc, char** argv) {
     int m = 50;
     char logFile[256];
     char url[256];
+    int logUrls = 0;
 
     pthread_rwlock_init(&pngStack, NULL);
     pthread_rwlock_init(&visitedStack, NULL);
@@ -121,6 +126,7 @@ int main(int argc, char** argv) {
                 }
                 else {
                     printf("%s: %s\n", "v", logFile);
+                    logUrls = 1;
                 }
                 break;
             case 1:
@@ -162,6 +168,8 @@ int main(int argc, char** argv) {
     html_args->t = all_visited_url;
     html_args->temp_previous = url_frontier;
     html_args->pngTable = pngTable;
+    html_args->logUrls = logUrls;
+    html_args->logFile = logFile;
 
     // start threads
     for (int i = 0; i < t; i++) {
@@ -170,6 +178,7 @@ int main(int argc, char** argv) {
 
     for (int i = 0; i < t; i++) {
         pthread_join(threads[i], (void**) &(p_res[i]));
+        printf("pthread exitted\n");
     }
 
     //Thread cleanup
