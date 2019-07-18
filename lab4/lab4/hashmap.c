@@ -26,13 +26,13 @@ int lookup(Hashtable * t, xmlChar * url, pthread_rwlock_t * rwlock){
     e.key = url;
     printf("KEY: %s", e.key);
     hsearch_r(e, FIND, &ep, &t->htab);
-    if(ep){
+    if(ep == NULL){
         pthread_rwlock_unlock(rwlock);
-        return 1;
+        return 0;
     }
     else{
         pthread_rwlock_unlock(rwlock);
-        return 0;
+        return 1;
     }
 }
 
