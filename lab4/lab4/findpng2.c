@@ -14,35 +14,27 @@ void* retrieve_html(void * arg){
     RECV_BUF recv_buf;
     html_struct* html_args = (html_struct*) arg;
     int res_data;
+    threadsFetching++;
 
     //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
     while(1) {
         //Check to see if we have reached our required png amount
-        __sync_fetch_and_add(&totalRetrievedPng, 0);
+        // __sync_fetch_and_add(&totalRetrievedPng, 0);
         if (totalRetrievedPng == html_args->requiredPngs) {
+            threadsFetching--;
             break;
         }
 
         //We still havent reached png limit
         //Get a new url from frontier
         memset(url, 0, strlen(url));
-        url[0] = '\0'; //Zero length string
-        pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url);
-        //Frontier is empty and there's nothing being fetched, we leave this thread
-        if (strlen(url) <= 0) {
-            __sync_fetch_and_add(&threadsFetching, 0);
-            if (threadsFetching == 0) {
-                printf("no more threads fetching and null url\n");
-                break;
-            }
-        }
-        else {
-            // check to see if the global hashmap (has critical sections) has the url
+        // url[0] = '\0'; //Zero length string
+        if(pop_from_stack(&html_args->url_frontier, &html_args->frontier_lock, url)){
             int n = lookup(html_args->all_visited_urls, url, &html_args->visitedStack);
             //printf("%d\n", n);
             if(n == 0) {
                 //printf("fetching from %s\n", url);
-                __sync_fetch_and_add(&threadsFetching, 1);
+                // __sync_fetch_and_add(&threadsFetching, 1);
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
                 res_data = process_data(curl, &recv_buf, &html_args, url);
@@ -51,7 +43,12 @@ void* retrieve_html(void * arg){
                 }
                 add_to_hashmap(html_args->all_visited_urls, url, &html_args->visitedStack); 
                 //print_stack(html_args->url_frontier, &html_args->frontier_lock);
-                __sync_fetch_and_sub(&threadsFetching, 1);
+                // __sync_fetch_and_sub(&threadsFetching, 1);
+            }
+        }
+        else{
+            if(threadsFetching == 0){
+                break;
             }
         }
     }

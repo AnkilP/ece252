@@ -24,7 +24,7 @@ url_node * create_new_stack(char* url){
         fprintf(stderr, "malloc() failed\n");
         exit(EXIT_FAILURE);
     }
-    char* nodeurl = malloc(strlen(url)  + 1);
+    char* nodeurl = (char * )malloc(strlen(url)  + 1);
     strcpy(nodeurl, url);
     e->url = nodeurl;
     e->next = NULL;
@@ -48,13 +48,13 @@ int cleanup_stack(url_node * head) {
 }
 
 int pop_from_stack(url_node ** stack, pthread_mutex_t * frontier_lock, char * url){
-    //char  * temp = htmlz->url;
+    pthread_mutex_lock(frontier_lock);
     if (*stack == NULL) {
+        pthread_mutex_unlock(frontier_lock);
         return 0;
     }
     strcpy(url, (*stack)->url);
     url_node * temp = *stack;
-    pthread_mutex_lock(frontier_lock);
     *stack = (*stack)->next;
     free(temp->url);
     free(temp);
