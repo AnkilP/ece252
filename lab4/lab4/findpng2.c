@@ -208,6 +208,21 @@ int main(int argc, char** argv) {
     html_args->pngStack = pngStack;
     html_args->visitedStack = visitedStack;
 
+    //Refresh the previous png_url.txt or log file
+    FILE *fp = NULL;
+    fp = fopen("png_urls.txt", "wb");
+    if (fp == NULL) {
+        perror("fopen");
+        return -2;
+    }
+    fclose(fp);
+    fp = fopen(logFile, "wb");
+    if (fp == NULL) {
+        perror("fopen");
+        return -2;
+    }
+    fclose(fp);
+
     // start threads
     for (int i = 0; i < t; i++) {
         pthread_create(&threads[i], NULL, retrieve_html, (void*) html_args);
@@ -229,6 +244,8 @@ int main(int argc, char** argv) {
     pthread_rwlock_destroy( &pngStack );
     pthread_rwlock_destroy( &visitedStack);
     pthread_mutex_destroy( &frontier_lock );
+    pthread_mutex_destroy(&thread_mutex);
+    pthread_cond_destroy(&thread_cond);
 
     free(html_args);
     curl_global_cleanup();
