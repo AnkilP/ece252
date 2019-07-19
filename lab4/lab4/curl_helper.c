@@ -7,7 +7,7 @@ htmlDocPtr mem_getdoc(char *buf, int size, const char *url)
     htmlDocPtr doc = htmlReadMemory(buf, size, url, NULL, opts);
     
     if ( doc == NULL ) {
-        fprintf(stderr, "Document not parsed successfully.\n");
+        //fprintf(stderr, "Document not parsed successfully.\n");
         return NULL;
     }
     return doc;
@@ -21,24 +21,24 @@ xmlXPathObjectPtr getnodeset (xmlDocPtr doc, xmlChar *xpath)
 
     context = xmlXPathNewContext(doc);
     if (context == NULL) {
-        printf("Error in xmlXPathNewContext\n");
+        //printf("Error in xmlXPathNewContext\n");
         return NULL;
     }
     result = xmlXPathEvalExpression(xpath, context);
     xmlXPathFreeContext(context);
     if (result == NULL) {
-        printf("Error in xmlXPathEvalExpression\n");
+        //printf("Error in xmlXPathEvalExpression\n");
         return NULL;
     }
     if(xmlXPathNodeSetIsEmpty(result->nodesetval)){
         xmlXPathFreeObject(result);
-        printf("No result\n");
+        //printf("No result: %s\n", xpath);
         return NULL;
     }
     return result;
 }
 
-int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node ** frontier_stack, pthread_mutex_t * frontier_lock)
+int find_http(char *buf, int size, int follow_relative_links, const char *base_url, url_node ** frontier_stack, Hashtable ** all_visited_urls, pthread_rwlock_t * visitedStack, pthread_mutex_t * frontier_lock)
 {
 
     int i;
@@ -65,7 +65,12 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
                 //printf("url: %s\n", (char*) href);
-                add_to_stack(frontier_stack, (char*) href, frontier_lock);
+                pthread_rwlock_wrlock(visitedStack);
+                int n = lookup(all_visited_urls, (char*) href);
+                pthread_rwlock_unlock(visitedStack);
+                if (!n) {
+                    add_to_stack(frontier_stack, (char*) href, frontier_lock);
+                }
             }
             xmlFree(href);
         }
@@ -95,7 +100,7 @@ size_t header_cb_curl(char *p_recv, size_t size, size_t nmemb, void *userdata)
     RECV_BUF *p = userdata;
 
 #ifdef DEBUG1_
-    //printf("%s", p_recv);
+    printf("%s", p_recv);
 #endif /* DEBUG1_ */
     if (realsize > strlen(ECE252_HEADER) &&
 	strncmp(p_recv, ECE252_HEADER, strlen(ECE252_HEADER)) == 0) {
@@ -193,12 +198,12 @@ int write_file(const char *path, const void *in, size_t len)
     FILE *fp = NULL;
 
     if (path == NULL) {
-        fprintf(stderr, "write_file: file name is null!\n");
+        //fprintf(stderr, "write_file: file name is null!\n");
         return -1;
     }
 
     if (in == NULL) {
-        fprintf(stderr, "write_file: input data is null!\n");
+        //fprintf(stderr, "write_file: input data is null!\n");
         return -1;
     }
 
@@ -209,12 +214,12 @@ int write_file(const char *path, const void *in, size_t len)
     }
 
     if (fwrite(in, 1, len, fp) != len) {
-        fprintf(stderr, "write_file: incomplete write!\n");
+        //fprintf(stderr, "write_file: incomplete write!\n");
         return -3; 
     }
 
-    if (fwrite("\n", sizeof(char), 1, fp)) {
-        fprintf(stderr, "write_file: incomplete write!\n");
+    if (fwrite("\n", sizeof(char), 1, fp) != 1) {
+        //fprintf(stderr, "write_file: incomplete write!\n");
         return -3; 
     }
     return fclose(fp);
@@ -244,7 +249,7 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     curl_handle = curl_easy_init();
 
     if (curl_handle == NULL) {
-        fprintf(stderr, "curl_easy_init: returned NULL\n");
+        //fprintf(stderr, "curl_easy_init: returned NULL\n");
         return NULL;
     }
 
@@ -290,32 +295,41 @@ CURL *easy_handle_init(RECV_BUF *ptr, const char *url)
     return curl_handle;
 }
 
-int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node ** stack, pthread_mutex_t * frontier_lock)
+int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node ** stack, Hashtable ** all_visited_urls, pthread_rwlock_t * visitedStack, pthread_mutex_t * frontier_lock)
 {
     int follow_relative_link = 1;
     char *url = NULL; 
 
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &url);
-    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, stack, frontier_lock);
+    find_http(p_recv_buf->buf, p_recv_buf->size, follow_relative_link, url, stack, all_visited_urls, visitedStack, frontier_lock);
     //sprintf(fname, "./output_%d.html", pid);
     //return write_file(fname, p_recv_buf->buf, p_recv_buf->size);
     return 0;
 }
 
-int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, pthread_rwlock_t * pngStack)
+int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable ** pngTable, pthread_rwlock_t * pngStack)
 {
     char fname[256];
     char *eurl = NULL;          /* effective URL */
+    int n;
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
     if ( eurl != NULL) {
         //printf("The PNG url is: %s\n", eurl);
     }
-    if(!lookup(pngTable, eurl, pngStack)) {
-        add_to_hashmap(pngTable, eurl, pngStack);
+    if (checkPng(p_recv_buf)) {
+        pthread_rwlock_wrlock(pngStack);
+        n = lookup(pngTable, eurl);
+        pthread_rwlock_unlock(pngStack);
+        if(!n) {
+            add_to_hashmap(pngTable, eurl, pngStack);
+            write_file("png_urls.txt", eurl, strlen(eurl));
+            return 1;
+        }
     }
-    sprintf(fname, "png_urls.txt");
-    return write_file(fname, eurl, strlen(eurl));
+
+    return 0;
 }
+
 /**
  * @brief process the download data by curl
  * @param CURL *curl_handle is the curl handler
@@ -323,19 +337,21 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable * pngTable, p
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct ** html_args, char* url)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct * html_args, url_node** url_frontier, Hashtable** pngTable, Hashtable ** all_visited_urls, char* url)
 {
     CURLcode res;
     long response_code;
+    int result;
+    int isPng = 0;
 
     res = curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &response_code);
     if ( res == CURLE_OK ) {
-	    printf("Response code: %ld\n", response_code);
+	    //printf("Response code: %ld\n", response_code);
     }
 
     if ( response_code >= 400 ) {
-    	fprintf(stderr, "Error.\n");
-        return 1;
+    	//fprintf(stderr, "400 Error.\n");
+        return -1;
     }
 
     char *ct = NULL;
@@ -343,18 +359,32 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct ** html_ar
     if ( res == CURLE_OK && ct != NULL ) {
     	//printf("Content-Type: %s, len=%ld\n", ct, strlen(ct));
     } else {
-        fprintf(stderr, "Failed obtain Content-Type\n");
-        return 2;
+        //fprintf(stderr, "Failed obtain Content-Type\n");
+        return -2;
     }
 
     if ( strstr(ct, CT_HTML) ) {
-        return process_html(curl_handle, p_recv_buf, &((*html_args)->url_frontier), &((*html_args)->frontier_lock));
+        result = process_html(curl_handle, p_recv_buf, url_frontier, all_visited_urls, &(html_args->visitedStack), &(html_args->frontier_lock));
+        if (result != 0) {
+            return -3;
+        }
     } else if ( strstr(ct, CT_PNG) ) {
-        return process_png(curl_handle, p_recv_buf, (*html_args)->png_urls, &((*html_args)->pngStack));
+        isPng = process_png(curl_handle, p_recv_buf, pngTable, &(html_args->pngStack));
+        if (isPng < 0) {
+            return -3;
+        }
     } else {}
 
-    if ((*html_args)->logUrls == 1) {
-        return write_file((*html_args)->logFile, url, strlen(url));
+    if (html_args->logUrls == 1) {
+        write_file(html_args->logFile, url, strlen(url));
+    }
+
+    return isPng;
+}
+
+int checkPng(RECV_BUF *p_recv_buf) {
+    if (p_recv_buf->buf[1] == 0x50 && p_recv_buf->buf[2] == 0x4e && p_recv_buf->buf[3] == 0x47) {
+        return 1;
     }
 
     return 0;
