@@ -29,7 +29,7 @@ void* retrieve_html(void * arg){
         //Check to see if we have reached our required png amount
         __sync_fetch_and_add(&totalRetrievedPng, 0);
         if (totalRetrievedPng >= html_args->requiredPngs) {
-            //printf("reached required pngs\n");
+            printf("reached required pngs\n");
             // curl_easy_cleanup(curl);
             // recv_buf_cleanup(&recv_buf);
             pthread_exit(NULL);
@@ -41,26 +41,27 @@ void* retrieve_html(void * arg){
 
         pthread_mutex_lock(&thread_mutex);
         while(isEmpty(url_frontier)) {
-            pthread_cond_wait( &thread_cond, &thread_mutex );
-            if (isEmpty(url_frontier) && threadsFetching == 0) {
+            if (threadsFetching > 0) {
+                pthread_cond_wait( &thread_cond, &thread_mutex );
+            } else {
                 pthread_mutex_unlock(&thread_mutex);
                 pthread_cond_broadcast( &thread_cond );
-                //printf("no more threads fetching and null url\n");
+                printf("no more threads fetching and null url\n");
                 // curl_easy_cleanup(curl);
                 // recv_buf_cleanup(&recv_buf);
                 pthread_exit(NULL);
             }
         }
-        pthread_mutex_unlock(&thread_mutex);
-
+        __sync_fetch_and_add(&threadsFetching, 1);
         pthread_mutex_lock(&html_args->frontier_lock);
         pop_from_stack(&url_frontier, &html_args->frontier_lock, url);
         pthread_mutex_unlock(&html_args->frontier_lock);
-
+        pthread_mutex_unlock(&thread_mutex);
         //Frontier is empty and there's nothing being fetched, we leave this thread
         if (url[0] == 0) {
+            __sync_fetch_and_sub(&threadsFetching, 1);
             if (threadsFetching == 0) {
-                //printf("no more threads fetching and null url\n");
+                printf("no more threads fetching and null url\n");
                 // curl_easy_cleanup(curl);
                 // recv_buf_cleanup(&recv_buf);
                 pthread_exit(NULL);
@@ -74,8 +75,7 @@ void* retrieve_html(void * arg){
             pthread_rwlock_unlock(&html_args->visitedStack);
             //printf("%d\n", n);
             if(n == 0) {
-                //printf("fetching from %s\n", url);
-                __sync_fetch_and_add(&threadsFetching, 1);
+                printf("fetching from %s\n", url);
                 curl = easy_handle_init(&recv_buf, url);
                 res = curl_easy_perform(curl);
                 res_data = process_data(curl, &recv_buf, html_args, &url_frontier, &pngTable, &all_visited_urls, url);
@@ -210,18 +210,20 @@ int main(int argc, char** argv) {
 
     //Refresh the previous png_url.txt or log file
     FILE *fp = NULL;
-    fp = fopen("png_urls.txt", "wb");
+    fp = fopen("png_urls.txt", "wb+");
     if (fp == NULL) {
         perror("fopen");
         return -2;
     }
     fclose(fp);
-    fp = fopen(logFile, "wb");
-    if (fp == NULL) {
-        perror("fopen");
-        return -2;
+        if (logUrls) {
+        fp = fopen(logFile, "wb+");
+        if (fp == NULL) {
+            perror("fopen");
+            return -2;
+        }
+        fclose(fp);
     }
-    fclose(fp);
 
     // start threads
     for (int i = 0; i < t; i++) {
