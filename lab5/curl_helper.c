@@ -64,7 +64,6 @@ int find_http(char *buf, int size, int follow_relative_links, const char *base_u
                 xmlFree(old);
             }
             if ( href != NULL && !strncmp((const char *)href, "http", 4) ) {
-                //printf("url: %s\n", (char*) href);
                 int n = lookup(all_visited_urls, (char*) href);
                 if (!n) {
                     add_to_stack(frontier_stack, (char*) href);
@@ -236,19 +235,19 @@ void easy_handle_multi_init(CURLM* curlm, RECV_BUF *ptr, const char *url)
     CURL *curl_handle = NULL;
 
     if ( ptr == NULL || url == NULL) {
-        return NULL;
+        return;
     }
 
     /* init user defined call back function buffer */
     if ( recv_buf_init(ptr, BUF_SIZE) != 0 ) {
-        return NULL;
+        return;
     }
     /* init a curl session */
     curl_handle = curl_easy_init();
 
     if (curl_handle == NULL) {
         fprintf(stderr, "curl_easy_init: returned NULL\n");
-        return NULL;
+        return;
     }
 
     /* specify URL to get */
@@ -290,6 +289,8 @@ void easy_handle_multi_init(CURLM* curlm, RECV_BUF *ptr, const char *url)
     /* allow whatever auth the server speaks */
     curl_easy_setopt(curl_handle, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
 
+    curl_easy_setopt(curl_handle, CURLOPT_PRIVATE, (void *)(ptr->buf));
+
     /* Add to curl multi handler */
     curl_multi_add_handle(curlm, curl_handle);
 }
@@ -308,7 +309,6 @@ int process_html(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node ** stack, Has
 
 int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable ** pngTable)
 {
-    char fname[256];
     char *eurl = NULL;          /* effective URL */
     int n;
     curl_easy_getinfo(curl_handle, CURLINFO_EFFECTIVE_URL, &eurl);
@@ -334,7 +334,7 @@ int process_png(CURL *curl_handle, RECV_BUF *p_recv_buf, Hashtable ** pngTable)
  * @return 0 on success; non-zero otherwise
  */
 
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct * html_args, url_node** url_frontier, Hashtable** pngTable, Hashtable ** all_visited_urls, char* url)
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node** url_frontier, Hashtable** pngTable, Hashtable ** all_visited_urls, char* url, int logUrls, char* logFile)
 {
     CURLcode res;
     long response_code;
@@ -372,8 +372,8 @@ int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, html_struct * html_arg
         }
     } else {}
 
-    if (html_args->logUrls == 1) {
-        write_file(html_args->logFile, url, strlen(url));
+    if (logUrls == 1) {
+        write_file(logFile, url, strlen(url));
     }
 
     return isPng;

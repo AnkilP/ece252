@@ -1,87 +1,5 @@
 #include "curl_helper.h"
 
-void* retrieve_html(void * arg) {
-    // arg should have url, condition var, pointer to hashmap
-
-    CURL *curl;
-    CURLcode res;
-    char url[256];
-    RECV_BUF recv_buf;
-    int res_data;
-
-    //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
-    while(1) {
-        //Check to see if we have reached our required png amount
-        __sync_fetch_and_add(&totalRetrievedPng, 0);
-        if (totalRetrievedPng >= html_args->requiredPngs) {
-            //printf("reached required pngs\n");
-            // curl_easy_cleanup(curl);
-            // recv_buf_cleanup(&recv_buf);
-            pthread_exit(NULL);
-        }
-        //We still havent reached png limit
-        //Get a new url from frontier
-        memset(url, 0, 256);
-
-        pthread_mutex_lock(&thread_mutex);
-        while(isEmpty(url_frontier)) {
-            if (threadsFetching > 0) {
-                pthread_cond_wait( &thread_cond, &thread_mutex );
-            } else {
-                pthread_mutex_unlock(&thread_mutex);
-                pthread_cond_broadcast( &thread_cond );
-                //printf("no more threads fetching and null url\n");
-                // curl_easy_cleanup(curl);
-                // recv_buf_cleanup(&recv_buf);
-                pthread_exit(NULL);
-            }
-        }
-        pthread_mutex_unlock(&thread_mutex);
-        
-        __sync_fetch_and_add(&threadsFetching, 1);
-        pthread_mutex_lock(&html_args->frontier_lock);
-        pop_from_stack(&url_frontier, &html_args->frontier_lock, url);
-        pthread_mutex_unlock(&html_args->frontier_lock);
-        //Frontier is empty and there's nothing being fetched, we leave this thread
-        if (url[0] == 0) {
-            __sync_fetch_and_sub(&threadsFetching, 1);
-            if (threadsFetching == 0) {
-                //printf("no more threads fetching and null url\n");
-                // curl_easy_cleanup(curl);
-                // recv_buf_cleanup(&recv_buf);
-                pthread_exit(NULL);
-            }
-        }
-        else {
-            // check to see if the global hash table (has critical sections) has the url
-            // Make sure no one is currently writting to the hash table
-            pthread_rwlock_wrlock(&html_args->visitedStack);
-            int n = lookup(&all_visited_urls, url);
-            pthread_rwlock_unlock(&html_args->visitedStack);
-            //printf("%d\n", n);
-            if(n == 0) {
-                //printf("fetching from %s\n", url);
-                curl = easy_handle_init(&recv_buf, url);
-                res = curl_easy_perform(curl);
-                res_data = process_data(curl, &recv_buf, html_args, &url_frontier, &pngTable, &all_visited_urls, url);
-                if (res_data < 0) {
-                    //printf("process data failed\n");
-                }
-                else if (res_data == 1) {
-                    //unique png file
-                    __sync_fetch_and_add(&totalRetrievedPng, 1);
-                }
-                add_to_hashmap(&all_visited_urls, url, &html_args->visitedStack);
-                //print_stack(html_args->url_frontier, &html_args->frontier_lock);
-                curl_easy_cleanup(curl);
-                recv_buf_cleanup(&recv_buf);
-                pthread_cond_broadcast( &thread_cond );
-            }
-            __sync_fetch_and_sub(&threadsFetching, 1);
-        }
-    }
-}
-
 int main(int argc, char** argv) {
     int c;
     int t = 1;
@@ -89,6 +7,7 @@ int main(int argc, char** argv) {
     char logFile[256];
     char url[256];
     int logUrls = 0;
+    int running = 0;
 
     double times[2];
     struct timeval tv;
@@ -98,13 +17,12 @@ int main(int argc, char** argv) {
     CURLcode return_code = 0;
     int msg_left = 0;
     int http_status_code;
-    const char *szUrl;
+    char *szUrl;
+    char* buf;
 
     int totalRetrievedPng = 0;
     int stillFetching = 0;
-
-    pthread_cond_t thread_cond;
-    pthread_mutex_t thread_mutex;
+    int res_data = 0;
 
     Hashtable* all_visited_urls = NULL;
     Hashtable* pngTable = NULL;
@@ -199,56 +117,74 @@ int main(int argc, char** argv) {
         fclose(fp);
     }
 
+    RECV_BUF recv_buf[t];
+
     while(1) {
         //Exit conditions
         /*--------------------------------------*/
         if (totalRetrievedPng >= m) {
+            //printf("found all png\n");
             break;
         }
 
-        if (isEmpty(url_frontier) && stillFetching == 0) {
+        if (isEmpty(url_frontier) && running == 0) {
+            //printf("no more frontier + no more running\n");
             break;
         }
         /*--------------------------------------*/
 
-        if (stillFetching < t) {
+        if (running < t - 1 && !isEmpty(url_frontier)) {
             //Start another Curl Multi
             char* url = calloc(256, sizeof(char));
             pop_from_stack(&url_frontier, url);
-            RECV_BUF recv_buf;
-            easy_handle_multi_init(curlm, &recv_buf, url);
-            int res = curl_multi_wait(curlm, NULL, 0, MAX_WAIT_MSECS, NULL);
-            if(res != CURLM_OK) {
-                fprintf(stderr, "error: curl_multi_wait() returned %d\n", res);
-                return EXIT_FAILURE;
-            }
-
-            curl_multi_perform (curlm, &stillFetching);
+            //printf("#%d performing: %s\n", running, url);
+            easy_handle_multi_init(curlm, &recv_buf[running++], url);
+            add_to_hashmap(&all_visited_urls, url);
         }
 
-        if (curlmsg = curl_multi_info_read(curlm, &msgs_left)) {
+        int res = curl_multi_wait(curlm, NULL, 0, MAX_WAIT_MSECS, NULL);
+        if(res != CURLM_OK) {
+            fprintf(stderr, "error: curl_multi_wait() returned %d\n", res);
+            return EXIT_FAILURE;
+        }
+        curl_multi_perform (curlm, &stillFetching);
+
+        if ((curlmsg = curl_multi_info_read(curlm, &msg_left))) {
             if (curlmsg->msg == CURLMSG_DONE) {
+                running--;
                 CURL* curl = curlmsg->easy_handle;
 
                 return_code = curlmsg->data.result;
-                if(return_code!=CURLE_OK) {
-                    fprintf(stderr, "CURL error code: %d\n", curlmsg->data.result);
+                if(return_code != CURLE_OK) {
+                    //fprintf(stderr, "CURL error code: %d\n", curlmsg->data.result);
                     continue;
                 }
 
                 // Get HTTP status code
                 http_status_code=0;
                 szUrl = NULL;
-
+                RECV_BUF buf;
+                recv_buf_init(&buf, BUF_SIZE);
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
-                curl_easy_getinfo(curl, CURLINFO_PRIVATE, &szUrl);
+                curl_easy_getinfo(curl, CURLINFO_PRIVATE, &(buf.buf));
+                curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &szUrl);
 
                 if(http_status_code==200) {
-                    printf("200 OK for %s\n", szUrl);
+                    //printf("200 OK for %s\n", szUrl);
                 } else {
-                    fprintf(stderr, "GET of %s returned http status code %d\n", szUrl, http_status_code);
+                    //fprintf(stderr, "GET of %s returned http status code %d\n", szUrl, http_status_code);
                 }
-
+                buf.size = strlen(buf.buf);
+                res_data = process_data(curl, &buf, &url_frontier, &pngTable, &all_visited_urls, szUrl, logUrls, logFile);
+                if (res_data < 0) {
+                    //printf("process data failed\n");
+                }
+                else if (res_data == 1) {
+                    //unique png file
+                    totalRetrievedPng++;
+                }
+                //print_stack(html_args->url_frontier, &html_args->frontier_lock);
+                recv_buf_cleanup(&buf);
                 curl_multi_remove_handle(curlm, curl);
                 curl_easy_cleanup(curl);
             }
@@ -266,6 +202,7 @@ int main(int argc, char** argv) {
     delete_hashmap(all_visited_urls);
     cleanup_stack(url_frontier);
 
+    curl_multi_cleanup(curlm);
     curl_global_cleanup();
 
     if (gettimeofday(&tv, NULL) != 0)

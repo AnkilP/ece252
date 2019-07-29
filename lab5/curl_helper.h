@@ -54,7 +54,7 @@
 #define CT_PNG_LEN  9
 #define CT_HTML_LEN 9
 
-#define MAX_WAIT_MSECS 30*1000 /* Wait max. 30 seconds */
+#define MAX_WAIT_MSECS 5*1000 /* Wait max. 5 seconds */
 
 #define max(a, b) \
    ({ __typeof__ (a) _a = (a); \
@@ -79,6 +79,6 @@ int recv_buf_init(RECV_BUF *ptr, size_t max_size);
 int recv_buf_cleanup(RECV_BUF *ptr);
 void cleanup(CURL *curl, RECV_BUF *ptr);
 int write_file(const char *path, const void *in, size_t len);
-void easy_handle_multi_init(RECV_BUF *ptr, const char *url);
-int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node** url_frontier, Hashtable** pngTable, Hashtable ** all_visited_urls, char* url);
+void easy_handle_multi_init(CURLM* curlm, RECV_BUF *ptr, const char *url);
+int process_data(CURL *curl_handle, RECV_BUF *p_recv_buf, url_node** url_frontier, Hashtable** pngTable, Hashtable ** all_visited_urls, char* url, int logUrls, char* logFile);
 int checkPng(RECV_BUF* p_recv_buf);
