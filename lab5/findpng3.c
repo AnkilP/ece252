@@ -199,10 +199,6 @@ int main(int argc, char** argv) {
         fclose(fp);
     }
 
-    //Seed URL CURL Kickstart
-    RECV_BUF recv_buf;
-    easy_handle_multi_init()
-
     while(1) {
         //Exit conditions
         /*--------------------------------------*/
@@ -219,10 +215,46 @@ int main(int argc, char** argv) {
             //Start another Curl Multi
             char* url = calloc(256, sizeof(char));
             pop_from_stack(&url_frontier, url);
+            RECV_BUF recv_buf;
+            easy_handle_multi_init(curlm, &recv_buf, url);
+            int res = curl_multi_wait(curlm, NULL, 0, MAX_WAIT_MSECS, NULL);
+            if(res != CURLM_OK) {
+                fprintf(stderr, "error: curl_multi_wait() returned %d\n", res);
+                return EXIT_FAILURE;
+            }
+
+            curl_multi_perform (curlm, &stillFetching);
         }
 
-        if (msg = curl_multi_info_read(curlm, &msgs_left)) {
+        if (curlmsg = curl_multi_info_read(curlm, &msgs_left)) {
+            if (curlmsg->msg == CURLMSG_DONE) {
+                CURL* curl = curlmsg->easy_handle;
 
+                return_code = curlmsg->data.result;
+                if(return_code!=CURLE_OK) {
+                    fprintf(stderr, "CURL error code: %d\n", curlmsg->data.result);
+                    continue;
+                }
+
+                // Get HTTP status code
+                http_status_code=0;
+                szUrl = NULL;
+
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_status_code);
+                curl_easy_getinfo(curl, CURLINFO_PRIVATE, &szUrl);
+
+                if(http_status_code==200) {
+                    printf("200 OK for %s\n", szUrl);
+                } else {
+                    fprintf(stderr, "GET of %s returned http status code %d\n", szUrl, http_status_code);
+                }
+
+                curl_multi_remove_handle(curlm, curl);
+                curl_easy_cleanup(curl);
+            }
+            else {
+                fprintf(stderr, "error: after curl_multi_info_read(), CURLMsg=%d\n", curlmsg->msg);
+            }
         }
     }
 

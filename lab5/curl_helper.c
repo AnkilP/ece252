@@ -1,15 +1,5 @@
 #include "curl_helper.h"
 
-void start_multi(CURLM *cm, char* url) {
-  CURL *eh = curl_easy_init();
-  curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, cb);
-  curl_easy_setopt(eh, CURLOPT_HEADER, 0L);
-  curl_easy_setopt(eh, CURLOPT_URL, url);
-  curl_easy_setopt(eh, CURLOPT_PRIVATE, url);
-  curl_easy_setopt(eh, CURLOPT_VERBOSE, 0L);
-  curl_multi_add_handle(cm, eh);
-}
-
 htmlDocPtr mem_getdoc(char *buf, int size, const char *url)
 {
     int opts = HTML_PARSE_NOBLANKS | HTML_PARSE_NOERROR | \

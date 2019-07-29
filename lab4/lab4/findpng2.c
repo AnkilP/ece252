@@ -23,7 +23,6 @@ void* retrieve_html(void * arg){
     RECV_BUF recv_buf;
     html_struct* html_args = (html_struct*) arg;
     int res_data;
-    threadsFetching++;
 
     //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
     while(1) {
