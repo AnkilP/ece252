@@ -1,27 +1,12 @@
 #include "curl_helper.h"
-#include <sys/time.h>
-#include <sys/wait.h>
 
-void* retrieve_html(void* arg);
-
-int totalRetrievedPng = 0;
-int threadsFetching = 0;
-
-pthread_cond_t thread_cond;
-pthread_mutex_t thread_mutex;
-
-Hashtable* all_visited_urls = NULL;
-Hashtable* pngTable = NULL;
-url_node* url_frontier = NULL;
-
-void* retrieve_html(void * arg){
+void* retrieve_html(void * arg) {
     // arg should have url, condition var, pointer to hashmap
 
     CURL *curl;
     CURLcode res;
     char url[256];
     RECV_BUF recv_buf;
-    html_struct* html_args = (html_struct*) arg;
     int res_data;
 
     //while(html_data->iter < html_data->m || html_data->iterant != NULL) {
@@ -108,10 +93,22 @@ int main(int argc, char** argv) {
     double times[2];
     struct timeval tv;
 
-    //For accessing the url frontier hashmap
-    pthread_rwlock_t pngStack; //For accessing the png url stack
-    pthread_rwlock_t visitedStack; //For accessing the visited url stack
-    pthread_mutex_t frontier_lock; // For accesssing the url frontier
+    CURLM* curlm = NULL;
+    CURLMsg* curlmsg = NULL;
+    CURLcode return_code = 0;
+    int msg_left = 0;
+    int http_status_code;
+    const char *szUrl;
+
+    int totalRetrievedPng = 0;
+    int stillFetching = 0;
+
+    pthread_cond_t thread_cond;
+    pthread_mutex_t thread_mutex;
+
+    Hashtable* all_visited_urls = NULL;
+    Hashtable* pngTable = NULL;
+    url_node* url_frontier = NULL;
 
     if (gettimeofday(&tv, NULL) != 0)
     {
@@ -120,15 +117,7 @@ int main(int argc, char** argv) {
     }
     times[0] = (tv.tv_sec) + tv.tv_usec / 1000000.;
 
-    pthread_rwlock_init(&pngStack, NULL);
-    pthread_rwlock_init(&visitedStack, NULL);
-    pthread_mutex_init(&frontier_lock, NULL);
-    pthread_cond_init(&thread_cond, NULL);
-    pthread_mutex_init(&thread_mutex, NULL);
-    
-
-    char * str = "option requires an argument";  
-    curl_global_init(CURL_GLOBAL_DEFAULT);  
+    char * str = "option requires an argument";
 
     // read input command line arguments
     while (argc > 1 && (c = getopt (argc, argv, "-t:m:v:")) != -1) {
@@ -178,35 +167,20 @@ int main(int argc, char** argv) {
         }
     }
 
-    pthread_t threads[t];
-    int p_res[t];
+    curl_global_init(CURL_GLOBAL_ALL);
+    curlm = curl_multi_init();
     
     all_visited_urls = (Hashtable * )malloc(sizeof(*all_visited_urls));
     all_visited_urls->htab = &(struct hsearch_data ) { 0 };
     hcreate_r(1000, all_visited_urls->htab);
     all_visited_urls->size = 1000;
-    //memset((void *)&all_visited_url->htab, 0, sizeof(all_visited_url->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
-    //add_to_hashmap(all_visited_url, url, &visitedStack); // add the seed url
     
     pngTable = (Hashtable * )malloc(sizeof(*pngTable));
     pngTable->htab = &(struct hsearch_data ) { 0 };
     hcreate_r(m, pngTable->htab);
     pngTable->size = m;
-    //memset((void *)&pngTable->htab, 0, sizeof(pngTable->htab));//(struct hsearch_data) calloc(1, sizeof(t->htab));
     
     create_new_stack(&url_frontier, url);
-    //populate html_struct
-    html_struct * html_args = (html_struct *)malloc(sizeof(html_struct));
-    html_args->seedurl = url;
-    html_args->logUrls = logUrls;
-    html_args->logFile = logFile;
-    html_args->requiredPngs = m;
-    html_args->all_visited_urls = all_visited_urls;
-    html_args->png_urls = pngTable;
-    html_args->url_frontier = url_frontier;
-    html_args->frontier_lock = frontier_lock;
-    html_args->pngStack = pngStack;
-    html_args->visitedStack = visitedStack;
 
     //Refresh the previous png_url.txt or log file
     FILE *fp = NULL;
@@ -216,7 +190,7 @@ int main(int argc, char** argv) {
         return -2;
     }
     fclose(fp);
-        if (logUrls) {
+    if (logUrls) {
         fp = fopen(logFile, "wb+");
         if (fp == NULL) {
             //perror("fopen");
@@ -225,14 +199,31 @@ int main(int argc, char** argv) {
         fclose(fp);
     }
 
-    // start threads
-    for (int i = 0; i < t; i++) {
-        pthread_create(&threads[i], NULL, retrieve_html, (void*) html_args);
-    }
+    //Seed URL CURL Kickstart
+    RECV_BUF recv_buf;
+    easy_handle_multi_init()
 
-    for (int i = 0; i < t; i++) {
-        pthread_join(threads[i], (void**) &(p_res[i]));
-        //printf("pthread exitted\n");
+    while(1) {
+        //Exit conditions
+        /*--------------------------------------*/
+        if (totalRetrievedPng >= m) {
+            break;
+        }
+
+        if (isEmpty(url_frontier) && stillFetching == 0) {
+            break;
+        }
+        /*--------------------------------------*/
+
+        if (stillFetching < t) {
+            //Start another Curl Multi
+            char* url = calloc(256, sizeof(char));
+            pop_from_stack(&url_frontier, url);
+        }
+
+        if (msg = curl_multi_info_read(curlm, &msgs_left)) {
+
+        }
     }
 
     //Thread cleanup
@@ -243,13 +234,6 @@ int main(int argc, char** argv) {
     delete_hashmap(all_visited_urls);
     cleanup_stack(url_frontier);
 
-    pthread_rwlock_destroy( &pngStack );
-    pthread_rwlock_destroy( &visitedStack);
-    pthread_mutex_destroy( &frontier_lock );
-    pthread_mutex_destroy(&thread_mutex);
-    pthread_cond_destroy(&thread_cond);
-
-    free(html_args);
     curl_global_cleanup();
 
     if (gettimeofday(&tv, NULL) != 0)
